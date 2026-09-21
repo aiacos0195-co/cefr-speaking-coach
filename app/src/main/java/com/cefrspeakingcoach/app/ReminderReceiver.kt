@@ -1,33 +1,33 @@
 package com.cefrspeakingcoach.app
 
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.core.app.NotificationCompat
 
+/**
+ * Recibe la alarma diaria, lanza la notificacion y programa la de manana.
+ *
+ * Lo segundo no es opcional: la alarma es un disparo unico
+ * (setAndAllowWhileIdle), asi que sin esta reprogramacion el recordatorio
+ * sonaria una vez y nunca mas.
+ *
+ * La notificacion se arma en DailyReminderManager para que el boton de prueba
+ * de debug recorra exactamente este mismo camino.
+ */
 class ReminderReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
-        val openAppIntent = Intent(context, MainActivity::class.java)
-        val openAppPendingIntent = PendingIntent.getActivity(
-            context,
-            3001,
-            openAppIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val reminderManager = DailyReminderManager(context)
+        reminderManager.showReminderNotification()
 
-        val notification = NotificationCompat.Builder(context, DailyReminderManager.CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Time to practice")
-            .setContentText("Open CEFR Speaking Coach and complete a speaking session today.")
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .setContentIntent(openAppPendingIntent)
-            .build()
-
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(3002, notification)
+        // Lectura sincrona: AppSettingsStore vive sobre SharedPreferences y
+        // carga los valores al construirse, asi que no hay que bloquear nada.
+        val settings = AppSettingsStore(context).settings.value
+        if (settings.dailyReminderEnabled) {
+            reminderManager.scheduleDailyReminder(
+                settings.reminderHour,
+                settings.reminderMinute
+            )
+        }
     }
 }

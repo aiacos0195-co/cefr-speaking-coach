@@ -192,7 +192,7 @@ fun AppDrawerShell(
 
                 DrawerItem(
                     icon = Icons.Outlined.RecordVoiceOver,
-                    label = "Coach voice",
+                    label = "Coach Voice",
                     selected = selectedScreen == DrawerScreen.COACH_VOICE
                 ) { navigate(DrawerScreen.COACH_VOICE) }
 

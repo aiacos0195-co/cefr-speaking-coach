@@ -50,7 +50,7 @@ data class CoachVoiceStrings(
             if (language == UiLanguage.ES) spanish() else english()
 
         private fun english() = CoachVoiceStrings(
-            title = "Coach voice",
+            title = "Coach Voice",
             intro = "Your coach can speak with a natural voice that works " +
                 "without internet. You download it once and it stays on your " +
                 "phone. Without it, your coach uses the system voice.",
@@ -64,7 +64,7 @@ data class CoachVoiceStrings(
             wifiOnlyTitle = "Download over Wi-Fi only",
             wifiOnlySubtitle = "Keeps it off your mobile data plan.",
             listenTitle = "Listen to the coaches",
-            listenSubtitle = "Pick who you practise with from the conversation screen.",
+            listenSubtitle = "Pick who you practice with from the conversation screen.",
             listenButton = "Listen",
             playingLabel = "Playing...",
             credits = "Voice generated with LibriTTS-R (CC BY 4.0) and Piper, " +

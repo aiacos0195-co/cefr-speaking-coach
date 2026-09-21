@@ -6,7 +6,14 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!--
+        Para reprogramar el recordatorio tras reiniciar. No hay
+        SCHEDULE_EXACT_ALARM: el recordatorio usa setAndAllowWhileIdle, que no
+        lo necesita. Declarar un permiso que no se ejerce solo sirve para que
+        Play pregunte por el.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
         Package visibility, required since API 30.
@@ -49,6 +56,16 @@
         <receiver
             android:name=".ReminderReceiver"
             android:exported="false" />
+
+        <!-- exported="true" porque quien lo invoca es el sistema, no la app. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

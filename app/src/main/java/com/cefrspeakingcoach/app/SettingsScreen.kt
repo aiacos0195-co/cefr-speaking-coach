@@ -39,7 +39,7 @@ import java.util.Locale
 /**
  * Ajustes de la app.
  *
- * Bilingüe con el mismo mecanismo que "Coach voice" y "About", pero el idioma
+ * Bilingüe con el mismo mecanismo que "Coach Voice" y "About", pero el idioma
  * ya no vive aquí: llega desde MainActivity, que se lo pasa también a la barra
  * superior del drawer. Así el título de la barra y el de la pantalla dicen
  * siempre lo mismo. La elección se recuerda entre sesiones.
@@ -229,18 +229,43 @@ fun SettingsScreen(
                 Text(strings.chooseTimeButton)
             }
 
+            // Elegir el minuto en curso manda el recordatorio a manana, porque
+            // los segundos cuentan como ya pasados. Decir "hoy" o "manana"
+            // evita que alguien se quede esperando un aviso de hace un minuto.
+            val hora = formatReminderTime(
+                settings.reminderHour,
+                settings.reminderMinute,
+                strings.timeAm,
+                strings.timePm
+            )
+
             Text(
-                strings.currentReminder(
-                    formatReminderTime(
+                if (reminderManager.isNextReminderToday(
                         settings.reminderHour,
-                        settings.reminderMinute,
-                        strings.timeAm,
-                        strings.timePm
+                        settings.reminderMinute
                     )
-                ),
+                ) {
+                    strings.nextReminderToday(hora)
+                } else {
+                    strings.nextReminderTomorrow(hora)
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+
+        // Solo en debug. Separa las dos cosas que desde fuera se ven igual:
+        // "la app puede notificar" y "la alarma se programa bien". Si este
+        // boton suena y el recordatorio no llega, el problema es la alarma.
+        // No depende del interruptor a proposito: se prueba la notificacion,
+        // no el recordatorio.
+        if (BuildConfig.DEBUG) {
+            OutlinedButton(
+                onClick = { reminderManager.showReminderNotification() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(strings.testReminderButton)
+            }
         }
     }
 }

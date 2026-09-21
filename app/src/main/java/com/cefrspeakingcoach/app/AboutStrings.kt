@@ -43,7 +43,7 @@ data class AboutStrings(
                 "listens and answers.",
             versionLabel = { name, code -> "Version $name (build $code)" },
             whatItIsTitle = "What this app is",
-            whatItIs = "A place to practise speaking English out loud without " +
+            whatItIs = "A place to practice speaking English out loud without " +
                 "an audience. You choose a coach, you talk, and the coach " +
                 "answers as a conversation partner would, adjusting to your " +
                 "level. Corrections appear in writing under the reply so they " +
@@ -61,14 +61,14 @@ data class AboutStrings(
                 "device. Keep that in mind before discussing anything sensitive.",
             privacyNoAccount = "Your practice history and progress stay on your " +
                 "phone.",
-            licenseTitle = "Licence",
+            licenseTitle = "License",
             licenseBody = "This app is free software, released under the GNU " +
                 "General Public License v3.0. You may use it, study it, change " +
                 "it and share it. Its source code is public.",
             sourceCodeLabel = "Source code:",
-            creditsTitle = "Credits and licences",
+            creditsTitle = "Credits and licenses",
             creditsIntro = "This app stands on open source work:",
-            licenseNote = "Full licence texts are available from each project. " +
+            licenseNote = "Full license texts are available from each project. " +
                 "LibriTTS-R is used under CC BY 4.0, which requires this credit."
         )
 

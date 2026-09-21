@@ -13,7 +13,11 @@ package com.cefrspeakingcoach.app
  *
  * La hora del recordatorio va como lambda y no concatenada, por lo mismo que en
  * CoachVoiceStrings: así el dato queda DENTRO de la frase y cada idioma lo pone
- * donde le corresponde. El sufijo de 12 horas también es texto traducible: en
+ * donde le corresponde.
+ *
+ * Hay dos frases, "hoy" y "mañana", en vez de una con la palabra pegada aparte:
+ * en español el día no va donde va en inglés, y partir la frase para insertarlo
+ * es justo la forma de romper una traducción. El sufijo de 12 horas también es texto traducible: en
  * español no se escribe "PM" sino "p. m.", con puntos y espacio.
  */
 data class SettingsStrings(
@@ -27,9 +31,11 @@ data class SettingsStrings(
     val dailyReminderSubtitle: String,
     val reminderTimeTitle: String,
     val chooseTimeButton: String,
-    val currentReminder: (String) -> String,
+    val nextReminderToday: (String) -> String,
+    val nextReminderTomorrow: (String) -> String,
     val timeAm: String,
     val timePm: String,
+    val testReminderButton: String,
     val notificationsBlockedTitle: String,
     val notificationsBlockedBody: String,
     val openNotificationSettings: String
@@ -51,9 +57,11 @@ data class SettingsStrings(
                 "every day.",
             reminderTimeTitle = "Reminder time",
             chooseTimeButton = "Choose time",
-            currentReminder = { time -> "Current reminder: $time" },
+            nextReminderToday = { time -> "Next reminder: today at $time" },
+            nextReminderTomorrow = { time -> "Next reminder: tomorrow at $time" },
             timeAm = "AM",
             timePm = "PM",
+            testReminderButton = "Test reminder now (debug)",
             notificationsBlockedTitle = "The reminder will not arrive",
             notificationsBlockedBody = "Notifications for this app are turned " +
                 "off in Android. The switch above is on, but nothing will " +
@@ -73,9 +81,11 @@ data class SettingsStrings(
                 "practicar inglés hablado.",
             reminderTimeTitle = "Hora del recordatorio",
             chooseTimeButton = "Elegir hora",
-            currentReminder = { time -> "Recordatorio actual: $time" },
+            nextReminderToday = { time -> "Próximo recordatorio: hoy, $time" },
+            nextReminderTomorrow = { time -> "Próximo recordatorio: mañana, $time" },
             timeAm = "a. m.",
             timePm = "p. m.",
+            testReminderButton = "Probar recordatorio ahora (debug)",
             notificationsBlockedTitle = "El recordatorio no te va a llegar",
             notificationsBlockedBody = "Las notificaciones de esta app están " +
                 "desactivadas en Android. El interruptor de arriba quedó " +
