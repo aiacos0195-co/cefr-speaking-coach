@@ -8,7 +8,8 @@ Para profe Andy. **Estado al 20 de septiembre de 2026.**
 | 2 — Firebase con el paquete nuevo | ✅ **Hecho** |
 | 3 — Compilar y probar | ✅ **Hecho** |
 | 4 — Publicar el código en GitHub (GPL v3) | ✅ **Hecho** |
-| 5 — Lo que falta antes de Play | ⬜ **Siguiente** |
+| 5 — Lo que falta antes de Play | 🔶 En curso (5.1 y 5.3 hechos) |
+| Abiertos — bug de transcripción, ícono, "PREMIUM ACCESS" | 🔴 **Lo de ahora** |
 
 ---
 
@@ -108,13 +109,46 @@ Borrarlo después no sirve — queda en el historial de Git para siempre.
 
 ---
 
+## 🔴 ABIERTOS — salieron el 20 de septiembre
+
+Van antes que el resto del paso 5.
+
+### A.1 La transcripción se corta en las sesiones por nivel · PRIORITARIO
+
+En una sesión de práctica por nivel, al tocar **Start record**, una pausa mínima
+al hablar corta la transcripción. El alumno se detiene a pensar medio segundo y
+pierde lo que venía diciendo.
+
+**Es el mismo problema que ya resolvimos en AI Conversation.** La sospecha es que
+las sesiones usan el reconocedor viejo de `MainActivity` (`startRecording`) y no
+el de `AIConversationScreen`, donde el arreglo ya vive.
+
+El arreglo es **extraer a un componente compartido** la lógica que ya funciona,
+no escribir un segundo parche. Dos reconocedores con dos arreglos distintos es
+cómo se llega a tener el mismo bug dos veces.
+
+> **NO modo continuo.** Reiniciar el reconocedor y coser los trozos está
+> descartado en el Anexo A: perdía texto. Esto no lo reabre.
+
+### A.2 El ícono sigue siendo el robot verde
+
+El de la plantilla de Android Studio. Hay que hacer uno propio antes de publicar;
+también hace falta para la ficha de Play (5.5).
+
+### A.3 La portada dice "PREMIUM ACCESS"
+
+La app es gratuita. Quitarlo.
+
+---
+
 ## PASO 5 — Lo que falta antes de publicar en Play
 
-### 5.1 Esconder la pantalla de audición en release
+### 5.1 Esconder la pantalla de audición en release ✅ HECHO
 
-"Voice audition" es una herramienta interna: muestra modelos, speaker ids y
-rutas de archivos. Un alumno no debería verla. No hay que borrarla, basta con
-ocultar la entrada del menú en builds de release. **Pendiente de hacer.**
+La entrada del menú va envuelta en `BuildConfig.DEBUG` (`AppDrawerShell.kt`). En
+release no se dibuja, y como no hay otra forma de navegar hasta ahí, la pantalla
+queda inalcanzable. El código sigue en su sitio para seguir afinando voces en
+debug.
 
 ### 5.2 Decidir sobre `coach_voice_packs`
 
@@ -125,10 +159,14 @@ habló con esos WAV, **¿sonó mejor o peor que la voz del sistema?**
 - Si peor → quitamos el motor completo (5 archivos de código + los assets)
 - Si mejor → se queda
 
-### 5.3 Traducción en Settings
+### 5.3 Traducción en Settings ✅ HECHO
 
-El mecanismo bilingüe ya es global (`UiLanguageStore`). Falta el archivo de
-textos de esa pantalla. Diez minutos.
+`SettingsStrings.kt`, con el mismo patrón de `AboutStrings` y `CoachVoiceStrings`.
+
+De paso se arregló algo que venía de antes: el idioma vivía dentro de cada
+pantalla, así que la barra superior del drawer seguía en inglés encima de una
+pantalla en español. Ahora el idioma vive en `MainActivity` y baja tanto a las
+tres pantallas traducidas como a la barra.
 
 ### 5.4 Play Console y App Check en producción
 
@@ -153,6 +191,39 @@ Check.
 - [ ] Formulario de Seguridad de los datos, coherente con lo anterior
 - [ ] Ícono, capturas, descripción
 - [ ] Clasificación de contenido
+
+### 5.6 El recordatorio diario ✅ HECHO
+
+No estaba en esta lista y resultó estar roto: no llegaba con el teléfono en
+reposo.
+
+**Causa:** `setRepeating` es inexacta desde API 19, y en Doze se aplazaba a la
+siguiente ventana de mantenimiento. Con la pantalla encendida llegaba; dormido,
+no. El `SCHEDULE_EXACT_ALARM` del manifest estaba declarado y no se usaba en
+ninguna parte.
+
+**Arreglado:**
+
+- `setAndAllowWhileIdle`, un disparo a la vez, reprogramando el siguiente al
+  recibir cada uno (`ReminderReceiver`). Sin alarmas exactas: para un
+  recordatorio de práctica el margen de ~9 minutos sobra, y evita un permiso
+  que en Android 14+ el alumno tendría que conceder a mano y que Play obliga a
+  justificar
+- `SCHEDULE_EXACT_ALARM` fuera del manifest
+- `BootReceiver` nuevo: Android borra las alarmas al apagar, y sin esto el
+  recordatorio quedaba muerto hasta que el alumno abriera la app — que es
+  justo lo que el recordatorio venía a provocar
+- La pantalla dice si el próximo recordatorio es **hoy** o **mañana**. Elegir el
+  minuto en curso lo manda a mañana, y antes eso era invisible
+- Tarjeta de aviso cuando el interruptor está encendido pero las notificaciones
+  están bloqueadas, con botón directo a los ajustes de la app. Al conceder el
+  permiso y volver, la alarma se programa: si no, la advertencia desaparecía sin
+  arreglar nada
+- Botón "Probar recordatorio ahora", solo en debug, por el mismo camino que la
+  alarma real
+
+**Probado:** dispara en reposo (22:55 → 23:00), el receptor reprograma, y tras
+reiniciar el teléfono `BootReceiver` vuelve a registrarla a los 66 segundos.
 
 ---
 
