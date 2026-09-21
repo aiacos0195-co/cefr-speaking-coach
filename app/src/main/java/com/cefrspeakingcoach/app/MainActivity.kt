@@ -203,10 +203,22 @@ fun MainScreen(
     val sessionStore = remember { SessionStore(context) }
     val reminderManager = remember { DailyReminderManager(context) }
     val promptStore = remember { PromptStore(context) }
+    val languageStore = remember { UiLanguageStore(context) }
 
     val settings by settingsStore.settings.collectAsState()
 
     var currentScreen by remember { mutableStateOf(DrawerScreen.HOME) }
+
+    // El idioma de las pantallas de ajustes vive aqui y no dentro de cada una,
+    // porque la barra superior del drawer tambien tiene que seguirlo. Con el
+    // estado metido en la pantalla, la barra se quedaba en ingles encima de un
+    // titulo en espanol.
+    var uiLanguage by remember { mutableStateOf(languageStore.language) }
+    val onUiLanguageChange: (UiLanguage) -> Unit = { next ->
+        uiLanguage = next
+        languageStore.language = next
+    }
+
     var selectedLevel by remember { mutableStateOf("A1") }
     var selectedHistorySession by remember { mutableStateOf<PracticeSession?>(null) }
     var savedPromptsLevelFilter by remember { mutableStateOf("All") }
@@ -601,6 +613,7 @@ fun MainScreen(
                 selectedHistorySession = null
             }
         },
+        uiLanguage = uiLanguage,
         currentUser = signedInUser,
         isSigningIn = isSigningIn,
         authError = authError,
@@ -797,7 +810,10 @@ fun MainScreen(
             )
         },
         coachVoiceContent = {
-            CoachVoiceScreen()
+            CoachVoiceScreen(
+                language = uiLanguage,
+                onLanguageChange = onUiLanguageChange
+            )
         },
         auditionContent = {
             SpeakerAuditionScreen()
@@ -828,11 +844,27 @@ fun MainScreen(
                     if (settings.dailyReminderEnabled && reminderManager.hasNotificationPermission()) {
                         reminderManager.scheduleDailyReminder(hour, minute)
                     }
-                }
+                },
+                onNotificationsGranted = {
+                    // Vuelve de los ajustes de Android con el permiso dado.
+                    // El LaunchedEffect de arriba no se entera, porque ni el
+                    // interruptor ni la hora cambiaron.
+                    if (settings.dailyReminderEnabled) {
+                        reminderManager.scheduleDailyReminder(
+                            settings.reminderHour,
+                            settings.reminderMinute
+                        )
+                    }
+                },
+                language = uiLanguage,
+                onLanguageChange = onUiLanguageChange
             )
         },
         aboutContent = {
-            AboutScreen()
+            AboutScreen(
+                language = uiLanguage,
+                onLanguageChange = onUiLanguageChange
+            )
         }
     )
 }

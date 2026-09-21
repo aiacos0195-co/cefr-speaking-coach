@@ -49,19 +49,20 @@ import kotlinx.coroutines.launch
  * último mensaje congelado en el idioma anterior.
  */
 @Composable
-fun CoachVoiceScreen() {
+fun CoachVoiceScreen(
+    language: UiLanguage,
+    onLanguageChange: (UiLanguage) -> Unit
+) {
     val context = LocalContext.current
 
     val installer = remember { SherpaModelInstaller(context) }
     val downloader = remember { SherpaModelDownloader(context) }
     val preferences = remember { VoicePreferences(context) }
-    val languageStore = remember { UiLanguageStore(context) }
     val uiScope = rememberCoroutineScope()
 
     val modelId = SherpaVoiceCatalog.fallbackModelId
     val model = SherpaVoiceCatalog.model(modelId)
 
-    var language by remember { mutableStateOf(languageStore.language) }
     var wifiOnly by remember { mutableStateOf(preferences.wifiOnly) }
     var downloadJob by remember { mutableStateOf<Job?>(null) }
     var percent by remember { mutableStateOf(0) }
@@ -157,10 +158,7 @@ fun CoachVoiceScreen() {
                 modifier = Modifier.weight(1f)
             )
 
-            LanguageToggleButton(language = language) { next ->
-                language = next
-                languageStore.language = next
-            }
+            LanguageToggleButton(language = language, onToggle = onLanguageChange)
         }
 
         Text(

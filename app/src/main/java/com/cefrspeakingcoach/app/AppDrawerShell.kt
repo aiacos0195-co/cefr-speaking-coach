@@ -62,6 +62,7 @@ enum class DrawerScreen {
 fun AppDrawerShell(
     selectedScreen: DrawerScreen,
     onScreenChange: (DrawerScreen) -> Unit,
+    uiLanguage: UiLanguage,
     currentUser: SignedInUser?,
     isSigningIn: Boolean,
     authError: String?,
@@ -237,11 +238,19 @@ fun AppDrawerShell(
                                 DrawerScreen.PROGRESS -> "Progress"
                                 DrawerScreen.PRACTICE_PLAN -> "Practice Plan"
                                 DrawerScreen.SAVED_PROMPTS -> "Saved Prompts"
-                                DrawerScreen.COACH_VOICE -> "Coach Voice"
+                                // Las tres pantallas traducidas sacan su
+                                // titulo de sus propios textos, para que la
+                                // barra no quede en ingles sobre una pantalla
+                                // en espanol. Las demas son de practica y se
+                                // quedan en ingles a proposito.
+                                DrawerScreen.COACH_VOICE ->
+                                    CoachVoiceStrings.of(uiLanguage).title
                                 DrawerScreen.AUDITION -> "Voice Audition"
-                                DrawerScreen.SETTINGS -> "Settings"
+                                DrawerScreen.SETTINGS ->
+                                    SettingsStrings.of(uiLanguage).title
 
-                                DrawerScreen.ABOUT -> "About"
+                                DrawerScreen.ABOUT ->
+                                    AboutStrings.of(uiLanguage).title
                             }
                         )
                     },
