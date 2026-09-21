@@ -2,14 +2,10 @@ package com.cefrspeakingcoach.app
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -166,6 +162,25 @@ private fun JSONObject.toAiFeedback(): AiFeedback {
     )
 }
 
+/**
+ * Capa B del reconocimiento en las sesiones por nivel: reiniciar el reconocedor
+ * y acumular cuando el motor cierra la frase por su cuenta.
+ *
+ * EN TRUE, y medido, no supuesto. La capa A sola no alcanza: en un Samsung, con
+ * las tres ventanas de silencio puestas, una pausa de 3 segundos cerraba la
+ * frase igual ("my best friend is Daniel", final COMPLETED a los pocos
+ * segundos). El motor de ese telefono ignora los extras, que es el caso conocido
+ * y la razon por la que esta capa existe.
+ *
+ * Con esto en true la captura dura hasta que el alumno pulsa detener o se acaba
+ * el tiempo. El tiempo hablado se ancla una sola vez en beginCapture(), y el
+ * texto se ensambla con merge por prefijo y dedup, asi que los reinicios no
+ * descuadran ni el WPM ni la transcripcion.
+ *
+ * Ver la nota sobre reconocimiento de voz en GUIA_PASOS.md.
+ */
+private const val SESSION_RESTART_ON_FINALIZE = true
+
 class MainActivity : ComponentActivity() {
     private lateinit var settingsStore: AppSettingsStore
 
@@ -254,19 +269,57 @@ fun MainScreen(
         promptStore.getFavoritePrompts()
     }
 
-    val speechRecognizer = remember(context) {
-        SpeechRecognizer.createSpeechRecognizer(context)
+    val speechCapture = remember(context) {
+        SpeechCapture(
+            context = context,
+            restartOnFinalize = SESSION_RESTART_ON_FINALIZE,
+            onTextChanged = { texto ->
+                // Los dos, siempre. analyzeSpeech usa transcript y solo cae a
+                // liveTranscript si esta vacio; el reconocedor viejo escribia
+                // transcript una sola vez, con el PRIMER parcial, asi que un
+                // final vacio dejaba al alumno con nota por sus primeras
+                // palabras. Manteniendo los dos al dia, eso no puede pasar.
+                transcript = texto
+                liveTranscript = texto
+            },
+            onEnded = { resultado ->
+                // El microfono esta cerrado. La pantalla tiene que reflejarlo:
+                // sin esto el boton seguiria en modo grabacion y el temporizador
+                // corriendo, y el alumno hablaria a la nada.
+                isRecording = false
+                spokenSeconds = ((SystemClock.elapsedRealtime() - recordingStartMs) / 1000L)
+                    .toInt().coerceAtLeast(0)
+                timeLeft = (totalSeconds - spokenSeconds).coerceAtLeast(0)
+
+                if (resultado.hasText) {
+                    transcript = resultado.text
+                    liveTranscript = resultado.text
+                }
+
+                statusText = when (resultado.end) {
+                    SpeechCaptureEnd.STOPPED -> "Stopped"
+
+                    // Hubo pausa larga PERO hay texto: no es un fallo, es un
+                    // turno que se cerro. Decirle "no se detecto voz" a alguien
+                    // que acaba de hablar es la otra forma de mentir.
+                    SpeechCaptureEnd.SILENCE ->
+                        if (resultado.hasText) "Long pause - turn ended. Evaluate, or record again."
+                        else "No speech detected"
+
+                    SpeechCaptureEnd.FAILED ->
+                        if (resultado.hasText) "Microphone stopped - your words were kept."
+                        else "Microphone error"
+
+                    SpeechCaptureEnd.COMPLETED ->
+                        if (resultado.hasText) "Finished. Evaluate, or record again."
+                        else "No speech detected"
+                }
+            }
+        )
     }
 
-    val recognizerIntent = remember {
-        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-US")
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
-        }
+    DisposableEffect(speechCapture) {
+        onDispose { speechCapture.release() }
     }
 
     fun durationForLevel(level: String): Int {
@@ -292,10 +345,8 @@ fun MainScreen(
     }
 
     fun clearSessionDataPreservePrompt() {
-        try {
-            speechRecognizer.cancel()
-        } catch (_: Exception) {
-        }
+        speechCapture.cancel()
+        speechCapture.clear()
 
         evaluationJob?.cancel()
         evaluationJob = null
@@ -314,100 +365,10 @@ fun MainScreen(
 
     fun stopRecordingNow() {
         if (!isRecording) return
-        isRecording = false
-        spokenSeconds = ((SystemClock.elapsedRealtime() - recordingStartMs) / 1000L).toInt().coerceAtLeast(0)
-        timeLeft = (totalSeconds - spokenSeconds).coerceAtLeast(0)
-        statusText = "Stopped"
-
-        try {
-            speechRecognizer.stopListening()
-        } catch (_: Exception) {
-            try {
-                speechRecognizer.cancel()
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    val recognitionListener = remember {
-        object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {
-                statusText = "Listening..."
-            }
-
-            override fun onBeginningOfSpeech() {
-                statusText = "Speak now"
-            }
-
-            override fun onRmsChanged(rmsdB: Float) = Unit
-            override fun onBufferReceived(buffer: ByteArray?) = Unit
-
-            override fun onEndOfSpeech() {
-                if (isRecording) {
-                    statusText = "Processing speech..."
-                }
-            }
-
-            override fun onError(error: Int) {
-                if (!isRecording) return
-
-                isRecording = false
-                spokenSeconds = ((SystemClock.elapsedRealtime() - recordingStartMs) / 1000L).toInt().coerceAtLeast(0)
-                timeLeft = (totalSeconds - spokenSeconds).coerceAtLeast(0)
-
-                statusText = when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH -> "No clear speech detected"
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Speech timeout"
-                    SpeechRecognizer.ERROR_CLIENT -> "Stopped"
-                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognizer busy"
-                    else -> "Error: $error"
-                }
-            }
-
-            override fun onResults(results: Bundle?) {
-                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                val best = matches?.firstOrNull()?.trim().orEmpty()
-
-                if (best.isNotBlank()) {
-                    transcript = best
-                    liveTranscript = best
-                }
-
-                if (isRecording) {
-                    isRecording = false
-                    spokenSeconds = ((SystemClock.elapsedRealtime() - recordingStartMs) / 1000L).toInt().coerceAtLeast(0)
-                    timeLeft = (totalSeconds - spokenSeconds).coerceAtLeast(0)
-                    statusText = "Stopped"
-                }
-            }
-
-            override fun onPartialResults(partialResults: Bundle?) {
-                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                val partial = matches?.firstOrNull()?.trim().orEmpty()
-                if (partial.isNotBlank()) {
-                    liveTranscript = partial
-                    if (transcript.isBlank()) {
-                        transcript = partial
-                    }
-                }
-            }
-
-            override fun onEvent(eventType: Int, params: Bundle?) = Unit
-        }
-    }
-
-    DisposableEffect(speechRecognizer) {
-        speechRecognizer.setRecognitionListener(recognitionListener)
-        onDispose {
-            try {
-                speechRecognizer.cancel()
-            } catch (_: Exception) {
-            }
-            try {
-                speechRecognizer.destroy()
-            } catch (_: Exception) {
-            }
-        }
+        // No tocamos isRecording ni el estado aqui: stop() termina la captura y
+        // onEnded deja la pantalla coherente, por el mismo camino que cualquier
+        // otro final. Un solo sitio donde se apaga la grabacion.
+        speechCapture.stop()
     }
 
     LaunchedEffect(isRecording, activeRecordToken) {
@@ -419,11 +380,7 @@ fun MainScreen(
                 timeLeft = (totalSeconds - elapsedSec).coerceAtLeast(0)
 
                 if (timeLeft <= 0 && isRecording) {
-                    isRecording = false
-                    try {
-                        speechRecognizer.stopListening()
-                    } catch (_: Exception) {
-                    }
+                    speechCapture.stop()
                     statusText = "Time's up"
                 }
             }
@@ -441,26 +398,29 @@ fun MainScreen(
         }
     }
 
+    fun beginCapture() {
+        activeRecordToken += 1
+        transcript = ""
+        liveTranscript = ""
+        feedback = null
+        aiError = null
+        spokenSeconds = 0
+        timeLeft = totalSeconds
+        // Se marca UNA vez, al empezar. Con la capa B encendida el reconocedor
+        // se reinicia por dentro varias veces, pero esto no se mueve, asi que
+        // "Spoken" sigue contando desde el principio y el WPM sale sobre el
+        // tiempo real de la sesion.
+        recordingStartMs = SystemClock.elapsedRealtime()
+        isRecording = true
+        statusText = "Listening..."
+        speechCapture.start()
+    }
+
     val recordPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            startRecording(
-                speechRecognizer = speechRecognizer,
-                recognizerIntent = recognizerIntent,
-                onStart = {
-                    activeRecordToken += 1
-                    transcript = ""
-                    liveTranscript = ""
-                    feedback = null
-                    aiError = null
-                    spokenSeconds = 0
-                    timeLeft = totalSeconds
-                    recordingStartMs = SystemClock.elapsedRealtime()
-                    isRecording = true
-                    statusText = "Listening..."
-                }
-            )
+            beginCapture()
         } else {
             aiError = "Microphone permission denied."
             statusText = "Permission denied"
@@ -477,22 +437,7 @@ fun MainScreen(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
 
         if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
-            startRecording(
-                speechRecognizer = speechRecognizer,
-                recognizerIntent = recognizerIntent,
-                onStart = {
-                    activeRecordToken += 1
-                    transcript = ""
-                    liveTranscript = ""
-                    feedback = null
-                    aiError = null
-                    spokenSeconds = 0
-                    timeLeft = totalSeconds
-                    recordingStartMs = SystemClock.elapsedRealtime()
-                    isRecording = true
-                    statusText = "Listening..."
-                }
-            )
+            beginCapture()
         } else {
             recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
@@ -867,24 +812,6 @@ fun MainScreen(
             )
         }
     )
-}
-
-private fun startRecording(
-    speechRecognizer: SpeechRecognizer,
-    recognizerIntent: Intent,
-    onStart: () -> Unit
-) {
-    try {
-        speechRecognizer.cancel()
-    } catch (_: Exception) {
-    }
-
-    onStart()
-
-    try {
-        speechRecognizer.startListening(recognizerIntent)
-    } catch (_: Exception) {
-    }
 }
 
 private fun wordCount(words: List<String>): Int = words.size
