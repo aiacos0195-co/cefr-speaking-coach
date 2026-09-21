@@ -298,7 +298,7 @@ tiene que seguir estando disponible.
 
 | Síntoma | Causa probable |
 |---|---|
-| El coach no responde en AI Conversation | Token de depuración de App Check |
+| El coach no responde en AI Conversation | Token de depuración de App Check. **Cambia cada vez que desinstalas la app o borras sus datos** — hay que registrar el nuevo en Firebase → App Check → Administrar tokens de depuración |
 | El botón Descargar sale gris | `MODELS_BASE_URL` sin configurar |
 | "Falló la descarga: HTTP 404" | El repo de voces se volvió privado, o cambió el tag |
 | Voz del sistema en vez de neuronal | El modelo no está instalado; míralo en Coach voice |
