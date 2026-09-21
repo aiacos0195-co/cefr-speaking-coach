@@ -189,6 +189,21 @@ Check.
       hace. Activarla antes de cambiar el código deja la conversación sin
       responder. Primero el código, después el interruptor.
 
+### 5.7 Presupuesto de razonamiento en la conversación
+
+`feedbackModel`, `promptBankModel` y `coachingModel` van con
+`thinkingBudget = 0`: son tareas de esquema fijo y el razonamiento solo les
+gastaba presupuesto de salida.
+
+`conversationModel` quedó **sin tocar**, con el razonamiento por defecto de
+Gemini 2.5 y `maxOutputTokens = 1500`. Funciona, así que no se cambió en la
+misma tanda.
+
+**Pendiente:** probar ahí un presupuesto bajo — 256 o 512, **no cero** — a ver
+si acorta la demora de las respuestas del coach. A diferencia del examinador,
+aquí el razonamiento sí puede estar aportando: decidir qué responder y qué
+corregir es una tarea abierta. Por eso se prueba, no se apaga.
+
 ### 5.5 Ficha de Play
 
 - [ ] Política de privacidad (obligatoria). Debe decir que el texto de la

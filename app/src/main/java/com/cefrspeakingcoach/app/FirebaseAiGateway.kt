@@ -6,6 +6,7 @@ import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.generationConfig
+import com.google.firebase.ai.type.thinkingConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -72,7 +73,26 @@ object FirebaseAiGateway {
                 responseMimeType = "application/json"
                 responseSchema = feedbackSchema
                 temperature = 0.2f
-                maxOutputTokens = 1200
+
+                // Razonamiento apagado. En Gemini 2.5 viene ENCENDIDO por
+                // defecto y sus tokens salen de maxOutputTokens, invisibles.
+                // Con 1200 y una transcripcion de 75 palabras el razonamiento
+                // se comia el presupuesto y el JSON se cortaba a medias:
+                // "Content generation stopped. Reason: MAX_TOKENS".
+                //
+                // Para un examinador con esquema fijo y temperature 0.2 la
+                // tarea es puntuar contra una rubrica, no resolver nada
+                // abierto, asi que el razonamiento largo aporta poco y a cambio
+                // hace que el costo dependa de cuanto hable el alumno.
+                //
+                // Si alguna transcripcion sale mal calificada, subir esto a 512
+                // antes que tocar cualquier otra cosa.
+                thinkingConfig = thinkingConfig { thinkingBudget = 0 }
+
+                // Con el razonamiento en cero, esto es todo para el JSON. Da de
+                // sobra para las 5 puntuaciones, 2 fortalezas, 3 mejoras y una
+                // version corregida de 80 palabras.
+                maxOutputTokens = 2048
             }
         )
     }
@@ -84,7 +104,12 @@ object FirebaseAiGateway {
                 responseMimeType = "application/json"
                 responseSchema = promptBankSchema
                 temperature = 0.7f
-                maxOutputTokens = 900
+
+                // Mismo motivo que el examinador: no habia fallado todavia,
+                // pero corria con 900 compartidos con el razonamiento. Genera
+                // una lista de prompts; no necesita deliberar.
+                thinkingConfig = thinkingConfig { thinkingBudget = 0 }
+                maxOutputTokens = 1536
             }
         )
     }
@@ -96,7 +121,11 @@ object FirebaseAiGateway {
                 responseMimeType = "application/json"
                 responseSchema = coachingSchema
                 temperature = 0.6f
-                maxOutputTokens = 1000
+
+                // Igual: 1000 compartidos con el razonamiento, y el esquema
+                // pide una lista de consejos mas una respuesta de ejemplo.
+                thinkingConfig = thinkingConfig { thinkingBudget = 0 }
+                maxOutputTokens = 1536
             }
         )
     }
@@ -111,6 +140,11 @@ object FirebaseAiGateway {
                 // partner that answers identically every time stops feeling
                 // like one. Low enough that it stays on task.
                 temperature = 0.8f
+                // Sin thinkingConfig a proposito: esta pantalla funciona y no
+                // se toca en el mismo cambio que las otras tres. Queda pendiente
+                // probar aqui un presupuesto bajo (no cero), a ver si acorta la
+                // demora de las respuestas del coach. Ver GUIA_PASOS.md.
+                //
                 // Was 500, which caused MAX_TOKENS: the budget must cover the
                 // model's internal reasoning tokens (Gemini 2.5) PLUS the full
                 // JSON (reply + correction + level). When it ran out mid-object
