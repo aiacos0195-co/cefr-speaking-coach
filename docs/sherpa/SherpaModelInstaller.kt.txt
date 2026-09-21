@@ -1,0 +1,206 @@
+// =====================================================================
+// SherpaModelInstaller.kt
+//
+// Staged file, same as SherpaCoachVoiceEngine.kt.txt. This one has no
+// sherpa imports, so you can move it into the source tree immediately if
+// you want to test model installation before wiring the engine.
+//
+// Target path:
+//   app/src/main/java/com/example/cefrspeakingcoach/SherpaModelInstaller.kt
+// =====================================================================
+
+package com.example.cefrspeakingcoach
+
+import android.content.Context
+import android.util.Log
+import java.io.File
+import java.io.InputStream
+import java.util.zip.ZipInputStream
+
+/**
+ * Finds and installs the sherpa-onnx TTS model.
+ *
+ * Layout after a successful install:
+ *
+ *   filesDir/
+ *     sherpa-tts/
+ *       current/
+ *         <voice>.onnx
+ *         tokens.txt
+ *         espeak-ng-data/
+ *           ...
+ *
+ * Two install paths are supported:
+ *
+ *  A. Bundled in assets, for a first test with no download UI. Costs 60-80 MB
+ *     of APK, so treat it as a development shortcut, not the shipping plan.
+ *  B. Downloaded at runtime into filesDir, which is what you want for Play
+ *     Store. This class only handles the unzip; wire the download to whatever
+ *     HTTP client you prefer and hand the resulting stream to installFromZip.
+ */
+class SherpaModelInstaller(
+    context: Context
+) {
+    private val appContext = context.applicationContext
+
+    private val rootDir: File
+        get() = File(appContext.filesDir, ROOT_DIR_NAME)
+
+    private val currentDir: File
+        get() = File(rootDir, CURRENT_DIR_NAME)
+
+    /** Returns the model directory if a complete install is present. */
+    fun installedModelDir(): File? {
+        val dir = currentDir
+        if (!dir.isDirectory) return null
+
+        val hasModel = findModelFile(dir) != null
+        val hasTokens = File(dir, "tokens.txt").exists()
+        val hasData = File(dir, "espeak-ng-data").isDirectory
+
+        if (hasModel && hasTokens && hasData) return dir
+
+        Log.w(
+            TAG,
+            "Incomplete install at ${dir.absolutePath} " +
+                "(model=$hasModel tokens=$hasTokens espeak=$hasData)"
+        )
+        return null
+    }
+
+    fun isInstalled(): Boolean = installedModelDir() != null
+
+    /**
+     * Piper archives name the model after the voice, so we look for any .onnx
+     * rather than hardcoding a filename that changes with every voice.
+     */
+    fun findModelFile(modelDir: File): File? {
+        return modelDir
+            .listFiles { file -> file.isFile && file.name.endsWith(".onnx", ignoreCase = true) }
+            ?.sortedBy { it.name }
+            ?.firstOrNull()
+    }
+
+    /**
+     * Unpacks a Piper model .zip into filesDir. The archive is expected to
+     * contain either the files at its root or inside a single top-level folder;
+     * both are flattened into current/.
+     *
+     * Note: the official sherpa-onnx releases are .tar.bz2, which Android
+     * cannot open without an extra library. Repackage the model as .zip once,
+     * host it yourself, and download that. Simpler than adding commons-compress.
+     */
+    fun installFromZip(input: InputStream): Result<File> = runCatching {
+        val staging = File(rootDir, STAGING_DIR_NAME)
+        staging.deleteRecursively()
+        staging.mkdirs()
+
+        ZipInputStream(input.buffered()).use { zip ->
+            var entry = zip.nextEntry
+
+            while (entry != null) {
+                val target = File(staging, entry.name)
+
+                // Reject path traversal before writing anything.
+                if (!target.canonicalPath.startsWith(staging.canonicalPath + File.separator)) {
+                    throw SecurityException("Zip entry escapes target dir: ${entry.name}")
+                }
+
+                if (entry.isDirectory) {
+                    target.mkdirs()
+                } else {
+                    target.parentFile?.mkdirs()
+                    target.outputStream().use { output ->
+                        zip.copyTo(output, DEFAULT_BUFFER_SIZE)
+                    }
+                }
+
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+
+        val source = flattenSingleRoot(staging)
+
+        currentDir.deleteRecursively()
+        currentDir.parentFile?.mkdirs()
+
+        if (!source.renameTo(currentDir)) {
+            source.copyRecursively(currentDir, overwrite = true)
+            source.deleteRecursively()
+        }
+
+        staging.deleteRecursively()
+
+        installedModelDir() ?: throw IllegalStateException(
+            "Install finished but the model directory is incomplete"
+        )
+    }
+
+    /**
+     * Development shortcut: copies a model already bundled under
+     * assets/<assetDir>/ into filesDir. Remember that a bundled .onnx must stay
+     * uncompressed (noCompress in build.gradle.kts) or it will be corrupt.
+     */
+    fun installFromAssets(assetDir: String): Result<File> = runCatching {
+        currentDir.deleteRecursively()
+        currentDir.mkdirs()
+
+        copyAssetDir(assetDir, currentDir)
+
+        installedModelDir() ?: throw IllegalStateException(
+            "Asset copy finished but the model directory is incomplete"
+        )
+    }
+
+    private fun copyAssetDir(assetPath: String, target: File) {
+        val children = appContext.assets.list(assetPath).orEmpty()
+
+        if (children.isEmpty()) {
+            target.parentFile?.mkdirs()
+            appContext.assets.open(assetPath).use { input ->
+                target.outputStream().use { output ->
+                    input.copyTo(output, DEFAULT_BUFFER_SIZE)
+                }
+            }
+            return
+        }
+
+        target.mkdirs()
+
+        children.forEach { child ->
+            copyAssetDir("$assetPath/$child", File(target, child))
+        }
+    }
+
+    /** If the zip wrapped everything in one folder, use that folder. */
+    private fun flattenSingleRoot(dir: File): File {
+        val entries = dir.listFiles().orEmpty()
+
+        return if (entries.size == 1 && entries[0].isDirectory) {
+            entries[0]
+        } else {
+            dir
+        }
+    }
+
+    fun uninstall() {
+        rootDir.deleteRecursively()
+    }
+
+    fun installedSizeBytes(): Long {
+        val dir = currentDir
+        if (!dir.isDirectory) return 0L
+
+        return dir.walkTopDown()
+            .filter { it.isFile }
+            .sumOf { it.length() }
+    }
+
+    companion object {
+        private const val TAG = "SherpaModelInstaller"
+        private const val ROOT_DIR_NAME = "sherpa-tts"
+        private const val CURRENT_DIR_NAME = "current"
+        private const val STAGING_DIR_NAME = "staging"
+    }
+}

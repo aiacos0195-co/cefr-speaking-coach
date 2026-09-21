@@ -1,0 +1,40 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# sherpa-onnx AAR (~20 MB per ABI)
+app/libs/*.aar
+
+# Credenciales de Firebase. NO van al repo publico.
+# Quien compile este proyecto debe poner su propio google-services.json
+# (ver README). La GPL exige el codigo fuente, no las llaves de tu proyecto.
+app/google-services.json
+
+# Firmas
+*.jks
+*.keystore
+keystore.properties
+
+# Modelos de voz descargables (se bajan en tiempo de ejecucion)
+app/src/main/assets/sherpa-model*/
+
+# Configuracion local de Android Studio. No le sirve a quien clone.
+.idea/
+
+# Servidor de pruebas de ElevenLabs (descartado). Su .env tiene una API key.
+tts-server/
+
+# Variables de entorno con credenciales, en cualquier carpeta.
+.env

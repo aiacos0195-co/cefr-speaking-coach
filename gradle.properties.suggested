@@ -1,0 +1,38 @@
+# Project-wide Gradle settings.
+# IDE (e.g. Android Studio) users:
+# Gradle settings configured through the IDE *will override*
+# any settings specified in this file.
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+# org.gradle.parallel=true
+android.useAndroidX=true
+kotlin.code.style=official
+android.nonTransitiveRClass=true
+
+# ---------------------------------------------------------------------------
+# The 10 flags below were REMOVED from your original gradle.properties.
+#
+# Every one of them appears in your build log as:
+#   "The option setting '...' is deprecated. It will be removed in version 10.0
+#    of the Android Gradle plugin."
+#
+# They all pin an OLD default. AGP has since flipped each of these defaults,
+# so setting them explicitly to the old value is exactly what triggers the
+# deprecation warning. Removing them lets AGP use its current defaults, which
+# is what you want on a new build. In AGP 10 an unknown/removed flag is a hard
+# error, not a warning, so clearing these now avoids a forced fix later.
+#
+# Removed:
+#   android.defaults.buildfeatures.resvalues=true
+#   android.sdk.defaultTargetSdkToCompileSdkIfUnset=false
+#   android.enableAppCompileTimeRClass=false
+#   android.usesSdkInManifest.disallowed=false
+#   android.uniquePackageNames=false
+#   android.dependency.useConstraints=true
+#   android.r8.strictFullModeForKeepRules=false
+#   android.r8.optimizedResourceShrinking=false
+#   android.builtInKotlin=false
+#   android.newDsl=false
+#
+# If any of these was added on purpose to work around something, add just that
+# one back. Otherwise leave them out.
+# ---------------------------------------------------------------------------

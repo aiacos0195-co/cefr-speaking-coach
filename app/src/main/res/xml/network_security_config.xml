@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Cleartext HTTP is off by default. It was globally enabled before, which
+    Play Store flags and which is not needed: Firebase, Render and the
+    sherpa-onnx model downloads are all HTTPS.
+
+    If you need plain HTTP against a laptop while developing, uncomment the
+    debug-overrides block and put your machine's IP there. It applies to
+    debuggable builds only and never ships in release.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+
+    <!--
+    <debug-overrides>
+        <domain-config cleartextTrafficPermitted="true">
+            <domain includeSubdomains="true">10.0.2.2</domain>
+            <domain includeSubdomains="true">192.168.1.100</domain>
+        </domain-config>
+    </debug-overrides>
+    -->
+</network-security-config>

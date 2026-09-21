@@ -1,0 +1,17 @@
+{
+  "packId": "james_v1",
+  "coachId": "james",
+  "displayName": "James Hybrid Voice Pack",
+  "version": 2,
+  "type": "HYBRID",
+  "sampleRate": 44100,
+  "channels": 2,
+  "units": [
+    {
+      "id": "opening",
+      "text": "Hello! I'm James, your conversation coach. How has your day been so far? I'd love to hear about what you enjoy doing.",
+      "assetPath": "opening.wav",
+      "tags": ["opening", "recorded_phrase", "test"]
+    }
+  ]
+}
