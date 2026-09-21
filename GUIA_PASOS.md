@@ -183,6 +183,11 @@ Check.
 - [ ] Vincular el proyecto de Firebase con Google Play
 - [ ] Mirar las métricas en App Check → pestaña APIs
 - [ ] Activar la obligatoriedad **solo** cuando veas tráfico verificado real
+- [ ] **Protección contra repetición (replay protection) en AI Logic.** Quedó
+      sin aplicar en la consola a propósito: exige que la app pida *tokens de un
+      solo uso* (limited-use tokens) al inicializar Firebase AI, y hoy no lo
+      hace. Activarla antes de cambiar el código deja la conversación sin
+      responder. Primero el código, después el interruptor.
 
 ### 5.5 Ficha de Play
 
