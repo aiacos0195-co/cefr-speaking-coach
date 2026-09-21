@@ -7,8 +7,8 @@ Para profe Andy. **Estado al 20 de septiembre de 2026.**
 | 1 — Cambio de paquete a `com.cefrspeakingcoach.app` | ✅ **Hecho** |
 | 2 — Firebase con el paquete nuevo | ✅ **Hecho** |
 | 3 — Compilar y probar | ✅ **Hecho** |
-| 4 — Publicar el código en GitHub (GPL v3) | ⬜ **Siguiente** |
-| 5 — Lo que falta antes de Play | ⬜ Pendiente |
+| 4 — Publicar el código en GitHub (GPL v3) | ✅ **Hecho** |
+| 5 — Lo que falta antes de Play | ⬜ **Siguiente** |
 
 ---
 
@@ -58,70 +58,53 @@ contra el `namespace`.
 
 ---
 
-## PASO 4 — Publicar el código (GPL v3) ⬅ SIGUIENTE
+## PASO 4 — Publicar el código (GPL v3) ✅ HECHO
 
-### 4.1 Decide el nombre del repositorio
+**Repositorio:** https://github.com/aiacos0195-co/cefr-speaking-coach
 
-En `AboutScreen.kt`, línea ~45, está:
+- [x] Repo público creado con el nombre que ya traía `SOURCE_CODE_URL`
+      (`AboutScreen.kt`, línea 45) — no hubo que cambiar el enlace
+- [x] `git init` y commit único `a7d93c2` "CEFR Speaking Coach bajo GPL v3":
+      109 archivos, 15.879 líneas, rama `main`
+- [x] Firmado como `Andy Páez <268912546+aiacos0195-co@users.noreply.github.com>`
+      — el correo privado de GitHub, no el real. Identidad puesta con `--local`,
+      así que solo aplica a este repo
+- [x] Push hecho y verificado: se ven README y LICENSE, y GitHub muestra la
+      etiqueta **GPL-3.0** junto al nombre del repo
 
-```kotlin
-private const val SOURCE_CODE_URL = "https://github.com/aiacos0195-co/cefr-speaking-coach"
-```
+### Lo que quedó FUERA, verificado contra el commit
 
-Ajústala al nombre real que le vayas a poner. **No es decorativo:** la GPL exige
-que quien recibe la app pueda conseguir el código, y ese enlace es como lo
-cumples desde la app.
+| No publicado | Dónde está |
+|---|---|
+| `app/google-services.json` | En disco; el `.gitignore` lo excluye |
+| `local.properties` | En disco; excluido |
+| `.idea/` (16 archivos) | En disco; excluido |
+| `build/` y `app/build/` (419 MB) | En disco; excluidos |
+| `tts-server/` | Borrado — ver abajo |
 
-### 4.2 Crea el repositorio
+Barrido de secretos sobre el árbol publicado: sin llaves de Google/Firebase,
+ElevenLabs, OpenAI ni AWS, sin tokens de GitHub, sin rutas `C:\Users\`.
 
-En GitHub, **público**, con el nombre que decidiste. Sin README (ya tienes uno).
+El único dato personal que sí se publicó está ahí a propósito: `CONTACT_EMAIL`
+en `AboutScreen.kt` línea 37. La GPL quiere que quien recibe la app pueda
+conseguir el código y contactar al autor.
 
-### 4.3 Sube el código
+### `tts-server` — tema cerrado
 
-El proyecto **todavía no tiene repo git**. En la terminal, dentro de la carpeta
-del proyecto:
+Era el servidor de pruebas de ElevenLabs. Al preparar el repo salió que tenía un
+`.env` con una API key y que además era un repo git embebido, así que `git add .`
+lo iba a meter como puntero vacío.
 
-```
-git init
-git add .
-git status
-```
+Ya no hay nada que cuidar: la carpeta **está borrada del disco**, su **repo
+privado de GitHub está borrado**, y la **API key de ElevenLabs fue revocada**.
+El `.gitignore` conserva las reglas de `tts-server/` y `.env` por si acaso.
 
-### 4.4 🔴 REVISA `git status` ANTES DE HACER COMMIT
+### Si algún día vuelves a hacer `git add .`
 
-Confirma que en la lista de archivos **NO aparezca**:
-
-- `app/google-services.json`
-- ningún `.jks` o `.keystore`
-- `local.properties`
-
-**Si aparece `google-services.json`, PARA.** El `.gitignore` no se aplicó bien;
-avísame antes de seguir.
-
-**Por qué importa tanto:** si haces commit con ese archivo, borrarlo después no
-sirve — queda en el historial de Git para siempre y hay que reescribirlo. Y con
-él, cualquiera puede apuntar su copia a *tu* proyecto de Firebase y gastarte la
-cuota de Gemini, que pagas tú.
-
-> El `.gitignore` actual ya cubre `app/google-services.json`, `*.jks`,
-> `*.keystore`, `keystore.properties`, `local.properties`, `/build` y los AAR de
-> sherpa-onnx. Aun así, revisa el `git status` con los ojos.
-
-### 4.5 Ahora sí
-
-```
-git commit -m "CEFR Speaking Coach bajo GPL v3"
-git branch -M main
-git remote add origin https://github.com/aiacos0195-co/NOMBRE-DEL-REPO.git
-git push -u origin main
-```
-
-### 4.6 Verifica en el navegador
-
-- [ ] Se ve el README con la explicación de la licencia
-- [ ] Se ve el archivo LICENSE
-- [ ] GitHub muestra "GPL-3.0" junto al nombre del repo
-- [ ] **NO** existe `app/google-services.json` en el repo
+Mira el `git status` antes del commit. Nunca debe aparecer:
+`app/google-services.json`, ningún `.jks` ni `.keystore`, `local.properties`,
+ningún `.env`. Si aparece alguno, el `.gitignore` se rompió: para y avísame.
+Borrarlo después no sirve — queda en el historial de Git para siempre.
 
 ---
 
@@ -186,9 +169,11 @@ Check.
 | Licencia | **GPL v3, código público** | espeak-ng (GPL) va dentro de sherpa-onnx |
 | `applicationId` | `com.cefrspeakingcoach.app` | Play rechaza `com.example` |
 | Voz de James | `sid 92` en libritts_r (antes 8) | Afinada de oído, 20-sep-2026 |
+| `tts-server` / ElevenLabs | Borrado del disco y de GitHub, llave revocada | Motor descartado; no dejar credenciales sueltas |
 
 ## Anexo B — Datos que vas a necesitar
 
+- **Repo del código:** `github.com/aiacos0195-co/cefr-speaking-coach` (público, GPL v3)
 - **Repo de las voces:** `github.com/aiacos0195-co/voices-v1`, tag `models-v1`
 - **Archivo del modelo:** `en_us_libritts_r.zip` (81,8 MB)
 - **Proyecto Firebase:** `cefr-speaking-coach`
