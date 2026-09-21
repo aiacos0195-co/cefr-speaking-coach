@@ -195,11 +195,18 @@ fun AppDrawerShell(
                     selected = selectedScreen == DrawerScreen.COACH_VOICE
                 ) { navigate(DrawerScreen.COACH_VOICE) }
 
-                DrawerItem(
-                    icon = Icons.Outlined.Speed,
-                    label = "Voice audition (debug)",
-                    selected = selectedScreen == DrawerScreen.AUDITION
-                ) { navigate(DrawerScreen.AUDITION) }
+                // Herramienta interna: muestra modelos, speaker ids y rutas de
+                // filesDir. Un alumno no deberia verla nunca, asi que en release
+                // la entrada no se dibuja y la pantalla queda inalcanzable desde
+                // la interfaz. El codigo sigue ahi: en debug aparece igual que
+                // siempre, para poder seguir afinando voces de oido.
+                if (BuildConfig.DEBUG) {
+                    DrawerItem(
+                        icon = Icons.Outlined.Speed,
+                        label = "Voice audition (debug)",
+                        selected = selectedScreen == DrawerScreen.AUDITION
+                    ) { navigate(DrawerScreen.AUDITION) }
+                }
 
                 DrawerItem(
                     icon = Icons.Outlined.Settings,
