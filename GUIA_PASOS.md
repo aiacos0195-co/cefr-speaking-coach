@@ -236,11 +236,48 @@ reiniciar el teléfono `BootReceiver` vuelve a registrarla a los 66 segundos.
 | Modelo británico | Descartado y borrado | No cumplía; ocupaba 94 MB |
 | Dónde vive el modelo | Descarga desde tu GitHub Releases | Sacar 95 MB del APK |
 | ElevenLabs | Descartado | Voces protegidas |
-| Modo continuo de reconocimiento | Descartado | Perdía texto |
+| Reinicio **ingenuo** del reconocedor | Descartado | Reiniciar y coser sin merge ni dedup perdía y duplicaba texto |
+| Reinicio **con acumulación** | En uso en AI Conversation | Con merge por prefijo y dedup encima, sí funciona. Ver la nota de abajo |
 | Licencia | **GPL v3, código público** | espeak-ng (GPL) va dentro de sherpa-onnx |
 | `applicationId` | `com.cefrspeakingcoach.app` | Play rechaza `com.example` |
 | Voz de James | `sid 92` en libritts_r (antes 8) | Afinada de oído, 20-sep-2026 |
 | `tts-server` / ElevenLabs | Borrado del disco y de GitHub, llave revocada | Motor descartado; no dejar credenciales sueltas |
+
+### Nota sobre el reconocimiento de voz — leer antes de tocarlo
+
+Esta distinción se perdió una vez y costó una instrucción equivocada, así que
+queda escrita.
+
+Lo que se descartó fue **reiniciar el reconocedor y pegar los trozos, sin más**.
+Así perdía texto: los motores de Android devuelven muchas veces la frase entera
+acumulada en cada sesión en vez de solo lo nuevo, y otras veces devuelven un
+final en blanco aunque las palabras sí hayan llegado por los parciales. Pegar a
+ciegas duplicaba lo primero y perdía lo segundo.
+
+Lo que corre hoy en `AIConversationScreen` **sí reinicia**, y funciona porque
+encima lleva la capa que a la versión ingenua le faltaba:
+
+- `appendCommittedSegment` con merge por prefijo: si el segmento nuevo contiene
+  al anterior como prefijo, lo reemplaza en vez de sumarlo
+- `normalizeForDedup` contra repeticiones, no solo contra la inmediata anterior
+- Rescate del final en blanco: si `onResults` llega vacío, se compromete lo que
+  haya en `currentPartialSegment` en lugar de tirarlo
+
+Y por debajo de todo eso, independiente del reinicio, están las **ventanas de
+silencio** del intent (`COMPLETE_SILENCE 4000`, `POSSIBLY_COMPLETE 2500`,
+`MINIMUM_LENGTH 1500`), que por sí solas ya toleran pausas de unos cuatro
+segundos dentro de una sola sesión de reconocimiento.
+
+**Son dos capas separables**, y conviene no confundirlas al hablar de esto:
+
+| Capa | Qué da | ¿Reinicia? |
+|---|---|---|
+| Ventanas de silencio | pausas de hasta ~4 s | No |
+| Reinicio con acumulación | pausas de cualquier duración | Sí |
+
+⚠️ Los extras de silencio son **ignorados por varios fabricantes**. Si en un
+teléfono concreto la capa de ventanas no alcanza, la de reinicio es el plan B y
+tiene que seguir estando disponible.
 
 ## Anexo B — Datos que vas a necesitar
 
