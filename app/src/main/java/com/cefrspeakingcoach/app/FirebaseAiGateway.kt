@@ -7,6 +7,7 @@ import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.generationConfig
 import com.google.firebase.ai.type.thinkingConfig
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -25,7 +26,6 @@ object FirebaseAiGateway {
             "scores" to Schema.obj(
                 mapOf(
                     "fluency" to Schema.integer(),
-                    "pronunciation" to Schema.integer(),
                     "grammar" to Schema.integer(),
                     "vocabulary" to Schema.integer(),
                     "coherence" to Schema.integer(),
@@ -173,7 +173,6 @@ object FirebaseAiGateway {
         prompt: String,
         transcript: String,
         wpm: Int,
-        fillerCount: Int,
         spokenSeconds: Int
     ): AiFeedback = withContext(Dispatchers.IO) {
         try {
@@ -185,12 +184,24 @@ Be concise.
 Use short output.
 Do not add any explanation outside the JSON.
 
-Target level: $targetLevel
+IMPORTANT - how to read the transcript:
+It comes from automatic speech recognition, not from writing. It has no
+punctuation and no capitalization, and some words may have been misheard.
+- Do NOT penalize missing punctuation, missing capitals, or run-on text.
+- Do NOT count a clearly misrecognized word as a learner error.
+- Judge only what the learner can be shown to have actually said.
+
+Estimate the level BLIND: decide cefr_level_estimate from the evidence in the
+transcript alone. The task level below is NOT a clue about the learner.
+
+Task level: $targetLevel
+Use the task level ONLY to pitch strengths, improvements and the corrected
+version at the right level. Never use it to decide cefr_level_estimate.
 
 Return:
 - overall: integer 1 to 5
 - cefr_level_estimate: one of A1, A2, B1, B2, C1, C2
-- scores: fluency, pronunciation, grammar, vocabulary, coherence (each 1 to 5)
+- scores: fluency, grammar, vocabulary, coherence (each 1 to 5)
 - strengths: exactly 2 short items
 - improvements: exactly 3 short items
 - corrected_version: short corrected version, max 80 words
@@ -198,13 +209,12 @@ Return:
 Prompt:
 $prompt
 
-Student transcript:
+Student transcript (automatic speech recognition):
 $transcript
 
 Stats:
 - spokenSeconds: $spokenSeconds
 - wpm: $wpm
-- fillerCount: $fillerCount
 """.trimIndent()
 
             val resp = feedbackModel.generateContent(examinerPrompt).text.orEmpty()
@@ -216,7 +226,6 @@ Stats:
                 cefr_level_estimate = j.optString("cefr_level_estimate", ""),
                 scores = AiScores(
                     fluency = s.optInt("fluency", 0),
-                    pronunciation = s.optInt("pronunciation", 0),
                     grammar = s.optInt("grammar", 0),
                     vocabulary = s.optInt("vocabulary", 0),
                     coherence = s.optInt("coherence", 0)
@@ -225,6 +234,12 @@ Stats:
                 improvements = jsonArrayToList(j.optJSONArray("improvements") ?: JSONArray()),
                 corrected_version = j.optString("corrected_version", "")
             )
+        } catch (c: CancellationException) {
+            // Cancelar no es fallar. Envolverla en RuntimeException rompia la
+            // concurrencia estructurada y convertia una cancelacion normal en
+            // "AI evaluation failed: StandaloneCoroutine was cancelled" en la
+            // cara del alumno. Los cuatro catch de este archivo tenian lo mismo.
+            throw c
         } catch (t: Throwable) {
             Log.e(TAG, "evaluateSpeaking failed", t)
             throw RuntimeException("AI evaluation failed: ${t.message ?: t.javaClass.simpleName}", t)
@@ -273,6 +288,8 @@ Rules:
                 )
             }
             out
+        } catch (c: CancellationException) {
+            throw c
         } catch (t: Throwable) {
             Log.e(TAG, "generatePromptBank failed", t)
             throw RuntimeException("Prompt refresh failed: ${t.message ?: t.javaClass.simpleName}", t)
@@ -322,6 +339,8 @@ ${lastOverall ?: "unknown"}
                 tips = tips,
                 exampleAnswer = j.optString("exampleAnswer", "").trim().ifBlank { null }
             )
+        } catch (c: CancellationException) {
+            throw c
         } catch (t: Throwable) {
             Log.e(TAG, "generateCoaching failed", t)
             throw RuntimeException("Coaching failed: ${t.message ?: t.javaClass.simpleName}", t)
@@ -452,6 +471,8 @@ $userText
                 levelEstimate = j.optString("cefr_level_estimate", "").trim().ifBlank { null },
                 source = CoachTurnSource.AI
             )
+        } catch (c: CancellationException) {
+            throw c
         } catch (t: Throwable) {
             Log.w(TAG, "generateConversationTurn failed: ${t.message}")
             throw RuntimeException("Conversation turn failed: ${t.message ?: t.javaClass.simpleName}", t)
@@ -469,6 +490,10 @@ $userText
     private suspend fun generateWithOneRetry(prompt: String): String {
         return try {
             conversationModel.generateContent(prompt).text.orEmpty()
+        } catch (c: CancellationException) {
+            // Sin esto, cancelar el turno disparaba el reintento: la llamada
+            // seguia viva despues de que nadie la esperaba.
+            throw c
         } catch (first: Throwable) {
             Log.w(TAG, "AI attempt 1 failed (${first.message}); retrying once")
             delay(600)

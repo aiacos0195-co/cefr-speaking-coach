@@ -49,14 +49,12 @@ fun ProgressScreen(sessions: List<PracticeSession>) {
                 val sessionsStreak = sessions.size // Simple streak logic for now
 
                 val avgFluency = sessionsWithAi.map { it.ai!!.scores.fluency }.average().toFloat() / 5f
-                val avgPronunciation = sessionsWithAi.map { it.ai!!.scores.pronunciation }.average().toFloat() / 5f
                 val avgGrammar = sessionsWithAi.map { it.ai!!.scores.grammar }.average().toFloat() / 5f
                 val avgVocabulary = sessionsWithAi.map { it.ai!!.scores.vocabulary }.average().toFloat() / 5f
                 val avgCoherence = sessionsWithAi.map { it.ai!!.scores.coherence }.average().toFloat() / 5f
 
                 val skills = listOf(
                     "Fluency" to avgFluency,
-                    "Pronunciation" to avgPronunciation,
                     "Grammar" to avgGrammar,
                     "Vocabulary" to avgVocabulary,
                     "Coherence" to avgCoherence

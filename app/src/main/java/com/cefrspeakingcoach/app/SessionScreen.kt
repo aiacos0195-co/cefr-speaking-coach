@@ -53,7 +53,6 @@ data class SessionScreenState(
     val spokenSeconds: Int,
     val wordCount: Int,
     val wpm: Int,
-    val fillerCount: Int,
     val aiLoading: Boolean,
     val promptRefreshLoading: Boolean,
     val aiError: String?,
@@ -287,7 +286,6 @@ fun SessionScreen(
                     Text("Words: ${state.wordCount}")
                     Text("Spoken time: ${state.spokenSeconds}s")
                     Text("Approx WPM: ${state.wpm}")
-                    Text("Fillers: ${state.fillerCount}")
                 }
             }
         }
@@ -346,10 +344,9 @@ fun SessionScreen(
                         )
 
                         SkillBar("Fluency", ai.scores.fluency / 5f, "${ai.scores.fluency}/5", 0)
-                        SkillBar("Pronunciation", ai.scores.pronunciation / 5f, "${ai.scores.pronunciation}/5", 1)
-                        SkillBar("Grammar", ai.scores.grammar / 5f, "${ai.scores.grammar}/5", 2)
-                        SkillBar("Vocabulary", ai.scores.vocabulary / 5f, "${ai.scores.vocabulary}/5", 3)
-                        SkillBar("Coherence", ai.scores.coherence / 5f, "${ai.scores.coherence}/5", 4)
+                        SkillBar("Grammar", ai.scores.grammar / 5f, "${ai.scores.grammar}/5", 1)
+                        SkillBar("Vocabulary", ai.scores.vocabulary / 5f, "${ai.scores.vocabulary}/5", 2)
+                        SkillBar("Coherence", ai.scores.coherence / 5f, "${ai.scores.coherence}/5", 3)
 
                         HorizontalDivider()
 

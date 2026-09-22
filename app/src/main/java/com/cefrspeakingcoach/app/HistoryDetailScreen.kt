@@ -135,7 +135,6 @@ fun HistoryDetailScreen(
                     Text("Spoken time: ${session.spokenSeconds}s")
                     Text("Words: ${session.wordCount}")
                     Text("WPM: ${session.wpm}")
-                    Text("Fillers: ${session.fillerCount}")
                 }
             }
         }
@@ -164,10 +163,9 @@ fun HistoryDetailScreen(
                         )
 
                         SkillProgress("Fluency", ai.scores.fluency / 5f, "${ai.scores.fluency}/5", 0)
-                        SkillProgress("Pronunciation", ai.scores.pronunciation / 5f, "${ai.scores.pronunciation}/5", 1)
-                        SkillProgress("Grammar", ai.scores.grammar / 5f, "${ai.scores.grammar}/5", 2)
-                        SkillProgress("Vocabulary", ai.scores.vocabulary / 5f, "${ai.scores.vocabulary}/5", 3)
-                        SkillProgress("Coherence", ai.scores.coherence / 5f, "${ai.scores.coherence}/5", 4)
+                        SkillProgress("Grammar", ai.scores.grammar / 5f, "${ai.scores.grammar}/5", 1)
+                        SkillProgress("Vocabulary", ai.scores.vocabulary / 5f, "${ai.scores.vocabulary}/5", 2)
+                        SkillProgress("Coherence", ai.scores.coherence / 5f, "${ai.scores.coherence}/5", 3)
 
                         if (ai.strengths.isNotEmpty()) {
                             HorizontalDivider()

@@ -139,6 +139,35 @@ también hace falta para la ficha de Play (5.5).
 
 La app es gratuita. Quitarlo.
 
+### A.4 Practice Plan no topa el contador en la meta
+
+Muestra **"9/3 sessions completed"**. El contador sigue subiendo pasada la meta
+en vez de quedarse en 3/3. Dos cosas que mirar de una vez: el número, y la
+barra de progreso, que con una fracción mayor que 1 puede dibujarse rara.
+
+### A.5 Números y fechas siguen el idioma del teléfono, el texto el de la app
+
+Se ve mezclado dentro de una misma pantalla:
+
+- Progress: **"2,6"** con coma al lado de **"/ 5.0"** con punto
+- Historial: **"sept 21"** en una pantalla que está en inglés
+
+La causa es que hay dos fuentes de idioma. El texto sale de `UiLanguage`, que
+el alumno elige con el botón de traducción; los números y las fechas salen de
+`Locale.getDefault()`, que es el del teléfono. En un teléfono en español con la
+app en inglés, cada frase mezcla los dos.
+
+La regla que hay que aplicar distingue dos tipos de pantalla:
+
+- **Las bilingües** (Settings, Coach Voice, About) formatean según `UiLanguage`,
+  no según el teléfono. Si el alumno eligió español, la coma decimal es correcta.
+- **Las que son siempre en inglés** (Progress, History, Practice Plan, Session)
+  formatean **en inglés**, no según el teléfono. Ahí no hay elección que seguir.
+
+Ojo al revisar: `formatReminderTime` en `SettingsScreen` ya usa
+`Locale.getDefault()`. Con `"%d:%02d"` no se nota —no hay separador decimal—
+pero es el mismo patrón y conviene dejarlo coherente.
+
 ---
 
 ## PASO 5 — Lo que falta antes de publicar en Play
@@ -203,6 +232,109 @@ misma tanda.
 si acorta la demora de las respuestas del coach. A diferencia del examinador,
 aquí el razonamiento sí puede estar aportando: decidir qué responder y qué
 corregir es una tarea abierta. Por eso se prueba, no se apaga.
+
+### 5.9 Versión 1 sin inicio de sesión ni Firestore
+
+**Decisión (21-sep-2026).** La v1 sale sin cuenta de Google y sin nube. El
+progreso lo cubre el Auto Backup de Android. La base de Firestore nunca llegó a
+crearse, así que no hay datos que migrar.
+
+Lo que se gana: desaparece el "recogido por el desarrollador" del formulario de
+Seguridad de los datos. Sin correo, sin nombre, sin transcripciones en un
+servidor propio.
+
+**Impedimento que hay que resolver en el mismo cambio.** Auto Backup tiene un
+tope de 25 MB por app, y el modelo de voz vive en `filesDir` y ocupa ~96 MB.
+Medido con `bmgr` en el S24: sin la voz descargada el paquete da Success con
+316 KB; con la voz, **"Size quota exceeded"**. Y cuando se pasa el tope Android
+**no recorta: descarta la copia entera, en silencio**. O sea que hoy, con Auto
+Backup "activado", el progreso de quien haya descargado la voz no se respalda.
+
+**Tres commits, en este orden:**
+
+1. **Reglas de respaldo.** Lista de **inclusión**, no de exclusión: solo los seis
+   `.xml` de la app. Así `filesDir` queda fuera —el modelo con él— y ningún
+   interno de Firebase entra nunca, se llame como se llame en la versión que
+   venga. Con la extensión en el `path`, que si no coincide deja las prefs fuera
+   sin avisar:
+
+   `cefr_sessions.xml` · `cefr_settings.xml` · `cefr_prompt_store.xml` ·
+   `sherpa_speaker_ids.xml` · `ui_language_prefs.xml` · `voice_download_prefs.xml`
+
+   En `backup_rules.xml` y en las **dos** secciones de
+   `data_extraction_rules.xml` (`cloud-backup` y `device-transfer`), para que el
+   comportamiento sea igual por cualquier camino.
+
+   ⚠️ El costo de la lista de inclusión: **unas prefs nuevas hay que agregarlas
+   a las dos reglas**, o dejan de respaldarse en silencio. Va comentado en cada
+   `getSharedPreferences`.
+
+   Incluye el texto de Coach Voice: "Se descarga una vez en cada teléfono y
+   queda guardada ahí."
+
+2. **Fuera login y Firestore.** `AuthManager.kt` y `FirestoreSessionRepository.kt`;
+   seis dependencias (`firebase-auth`, `firebase-firestore`, las dos de
+   `credentials`, `googleid` y `kotlinx-coroutines-play-services`); el bloque de
+   cuenta del drawer con sus cinco parámetros; unas 60 líneas de `MainActivity`.
+   `google-services.json` y su plugin se quedan: los usan AI Logic y App Check.
+
+   Con el texto nuevo de privacidad en "Acerca de", en los dos idiomas.
+
+3. **Evaluación duplicada.** Marca de "esta transcripción ya se evaluó", limpiada
+   en `beginCapture()`, con el botón **deshabilitado** — no una guarda que
+   ignore el toque en silencio. Hoy dos pulsaciones guardan dos sesiones
+   idénticas, porque el id sale de `System.currentTimeMillis()` y el dedup de
+   `SessionStore` compara por id.
+
+**Plan de prueba**
+
+- `adb shell bmgr backupnow com.cefrspeakingcoach.app` con la voz descargada:
+  ahora debe dar Success. **La línea que vale es la del paquete** — la última,
+  `Backup finished with result: Success`, se refiere a la corrida y sale bien
+  aunque el paquete falle.
+- Medir con `adb shell run-as com.cefrspeakingcoach.app ls -l shared_prefs` y
+  comparar la suma de los seis con lo que reporte `bmgr`. Si `bmgr` da
+  claramente más, está entrando algo que no debería.
+- Restaurar (desinstalar e instalar el APK; "Run" desde Studio no siempre
+  dispara la restauración): el historial vuelve, Coach Voice dice "Voz natural
+  no descargada", y el recordatorio o queda programado o muestra la tarjeta de
+  notificaciones bloqueadas. **Que no salga ninguna de las dos es el fallo.**
+- Evaluar dos veces la misma transcripción: el botón queda deshabilitado tras la
+  primera, y el historial no gana una sesión repetida.
+- **Grabar, no evaluar, y pulsar Refresh Prompt (AI):** la transcripción se
+  borra y Evaluate queda deshabilitado.
+
+### 5.8 Evaluar con audio en vez de texto
+
+Hoy el examinador recibe la **transcripción**, no la voz. Eso arrastra dos
+límites que no se arreglan con prompts:
+
+- Los errores del reconocedor llegan mezclados con los del alumno. El prompt ya
+  le pide a Gemini que no los penalice, pero eso es mitigar, no resolver.
+- **La pronunciación no se puede medir.** Por eso se quitó del esquema: pedirle
+  una nota a un modelo que solo ve texto le obligaba a inventarla.
+
+Y un tercero, de la misma familia: **las muletillas tampoco se pueden contar.**
+`fillerCount` estaba fijo en 0 y se le mandaba a Gemini como si fuera una
+medición — le decíamos en cada evaluación que el alumno no había dicho ni un
+"um". Ya se quitó del prompt y de la pantalla. Contarlas desde el texto no
+serviría: el reconocedor de Google suele eliminar los "um" y "uh" antes de
+entregar la transcripción, así que el texto siempre diría cero aunque el alumno
+dudara todo el tiempo.
+
+Gemini 2.5 Flash acepta audio. Mandarle la grabación resolvería los tres de una
+vez: sin errores del reconocedor, con pronunciación medida de verdad, y con las
+muletillas audibles donde sí están.
+
+**El costo es real:** `SpeechRecognizer` no entrega el audio, así que habría que
+grabar en paralelo con `MediaRecorder`, manejar el archivo y subirlo.
+
+⚠️ **Y antes de tocar una línea de código, hay que actualizar la sección de
+privacidad de "Acerca de".** Hoy dice que lo que sale del teléfono es el *texto*
+de la conversación. Con esto saldría **la voz del alumno**, que es un dato
+personal de otra categoría. Son alumnos militares hablando de su día: el aviso
+va primero, y el formulario de Seguridad de los datos de Play (5.5) tiene que
+decir lo mismo.
 
 ### 5.5 Ficha de Play
 

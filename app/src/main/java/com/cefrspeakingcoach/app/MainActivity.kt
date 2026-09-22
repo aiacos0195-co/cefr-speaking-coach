@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.cefrspeakingcoach.app.ui.theme.CEFRSpeakingCoachTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -128,7 +129,6 @@ private fun AiFeedback.toJson(): JSONObject {
             "scores",
             JSONObject().apply {
                 put("fluency", scores.fluency)
-                put("pronunciation", scores.pronunciation)
                 put("grammar", scores.grammar)
                 put("vocabulary", scores.vocabulary)
                 put("coherence", scores.coherence)
@@ -147,7 +147,6 @@ private fun JSONObject.toAiFeedback(): AiFeedback {
         cefr_level_estimate = getString("cefr_level_estimate"),
         scores = AiScores(
             fluency = scoresObj.getInt("fluency"),
-            pronunciation = scoresObj.getInt("pronunciation"),
             grammar = scoresObj.getInt("grammar"),
             vocabulary = scoresObj.getInt("vocabulary"),
             coherence = scoresObj.getInt("coherence")
@@ -454,6 +453,10 @@ fun MainScreen(
 
         isEvaluating = true
         aiError = null
+        // La nota anterior se va ANTES de pedir la nueva. Si esta evaluacion
+        // falla o se cancela, la pantalla no puede quedar mostrando una
+        // calificacion que no corresponde a esta transcripcion.
+        feedback = null
         statusText = "Evaluating..."
 
         evaluationJob?.cancel()
@@ -468,14 +471,17 @@ fun MainScreen(
                     prompt = currentPrompt?.text ?: "",
                     transcript = finalTranscript,
                     wpm = calculatedWpm,
-                    fillerCount = 0,
                     spokenSeconds = spokenSeconds
                 )
 
                 feedback = result
                 statusText = "Evaluation complete"
-                isEvaluating = false
 
+                // isEvaluating NO se apaga aqui. Debajo hay un guardado en
+                // Firestore que suspende, y apagarlo antes reactivaba el boton
+                // Evaluate mientras este mismo trabajo seguia vivo: el siguiente
+                // toque lo cancelaba y salia "StandaloneCoroutine was
+                // cancelled". Se apaga en el finally, cuando de verdad termino.
                 val session = PracticeSession(
                     id = System.currentTimeMillis().toString(),
                     createdAt = System.currentTimeMillis(),
@@ -490,21 +496,34 @@ fun MainScreen(
                     ai = result
                 )
 
+                // Primero lo local, que es sincrono y no puede colgarse.
                 sessionStore.saveSession(session)
-                signedInUser?.let { user ->
-                    firestoreRepository.saveSession(user.uid, session)
-                }
                 sessions = sessionStore.getSessions()
-                evaluationJob = null
+
+                // Y a la nube sin esperar: ver saveSessionInBackground. La
+                // evaluacion ya termino para el alumno; que la copia en la nube
+                // tarde, o no llegue, no puede dejarle el boton bloqueado.
+                signedInUser?.let { user ->
+                    firestoreRepository.saveSessionInBackground(user.uid, session)
+                }
                 return@launch
+            } catch (e: CancellationException) {
+                // Cancelar es una operacion normal, no un fallo. Relanzarla es
+                // lo que exige la concurrencia estructurada; atraparla como una
+                // excepcion mas es lo que ponia un error rojo en pantalla.
+                throw e
             } catch (e: Exception) {
                 aiError = e.message ?: "Analysis failed"
                 statusText = "Evaluation failed"
             } finally {
-                if (isEvaluating) {
-                    isEvaluating = false
+                isEvaluating = false
+
+                // Solo si el handle sigue apuntando a ESTE trabajo. Un trabajo
+                // cancelado termina despues de que el siguiente ya se registro,
+                // y sin esta comprobacion borraria el handle del nuevo.
+                if (evaluationJob === coroutineContext[Job]) {
+                    evaluationJob = null
                 }
-                evaluationJob = null
             }
         }
     }
@@ -624,7 +643,6 @@ fun MainScreen(
                     spokenSeconds = spokenSeconds,
                     wordCount = wordCount,
                     wpm = calculatedWpm,
-                    fillerCount = 0,
                     aiLoading = isEvaluating,
                     promptRefreshLoading = isRefreshingPrompt,
                     aiError = aiError,
@@ -639,8 +657,12 @@ fun MainScreen(
                 onToggleRecording = { toggleRecording() },
                 onEvaluate = { analyzeSpeech() },
                 onNewPrompt = {
-                    currentPrompt = nextLocalPrompt(selectedLevel, selectedCategory)
-                    clearSessionDataPreservePrompt()
+                    // Misma guarda que onSelectCategory y onRefreshPromptAi. Sin
+                    // ella, cambiar de prompt a media evaluacion la cancelaba.
+                    if (!isRecording && !isEvaluating && !isRefreshingPrompt) {
+                        currentPrompt = nextLocalPrompt(selectedLevel, selectedCategory)
+                        clearSessionDataPreservePrompt()
+                    }
                 },
                 onRefreshPromptAi = {
                     if (!isEvaluating && !isRefreshingPrompt) {

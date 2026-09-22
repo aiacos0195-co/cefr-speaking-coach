@@ -399,7 +399,6 @@ private fun computeWeakestSkill(
 
     val metrics = listOf(
         "Fluency" to scores.map { it.fluency }.average(),
-        "Pronunciation" to scores.map { it.pronunciation }.average(),
         "Grammar" to scores.map { it.grammar }.average(),
         "Vocabulary" to scores.map { it.vocabulary }.average(),
         "Coherence" to scores.map { it.coherence }.average()
@@ -411,7 +410,6 @@ private fun computeWeakestSkill(
 private fun focusHint(skill: String): String {
     return when (skill) {
         "Fluency" -> "Try to speak in longer chunks without stopping too often."
-        "Pronunciation" -> "Slow down a little and pronounce key words more clearly."
         "Grammar" -> "Keep your sentence structures simple and accurate."
         "Vocabulary" -> "Use slightly more varied words and avoid repeating the same ones."
         "Coherence" -> "Connect your ideas with clearer transitions and examples."
@@ -422,7 +420,6 @@ private fun focusHint(skill: String): String {
 private fun focusTips(skill: String): List<String> {
     return when (skill) {
         "Fluency" -> listOf("Keep speaking", "Avoid long pauses", "Use chunks")
-        "Pronunciation" -> listOf("Speak clearly", "Stress keywords", "Slow down slightly")
         "Grammar" -> listOf("Short correct sentences", "Check verb tenses", "Use simple patterns")
         "Vocabulary" -> listOf("Use richer words", "Avoid repetition", "Add examples")
         "Coherence" -> listOf("Use connectors", "Follow a structure", "Stay on topic")
