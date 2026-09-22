@@ -2,9 +2,11 @@ package com.cefrspeakingcoach.app
 
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -108,6 +110,29 @@ class SpeechCapture(
     private var stopRequested = false
     private var released = false
 
+    // Solo para la traza de debug. No influye en el comportamiento.
+    private var captureStartMs = 0L
+    private var lastStartListeningMs = 0L
+    private var lastEndOfSpeechMs = 0L
+    private var sessionIndex = 0
+
+    /**
+     * Traza del reconocimiento, SOLO en debug.
+     *
+     * Existe para poder distinguir dos fallos que desde fuera se ven igual: que
+     * el motor no oyera unas palabras, o que el ensamblado se las comiera. Los
+     * crudos de cada parcial y cada final responden lo primero; las lineas de
+     * SEGMENTO responden lo segundo.
+     *
+     * El tiempo va relativo al inicio de la captura, que es lo que se puede
+     * comparar con lo que uno recuerda haber dicho.
+     */
+    private fun trace(message: String) {
+        if (!BuildConfig.DEBUG) return
+        val t = if (captureStartMs == 0L) 0 else SystemClock.elapsedRealtime() - captureStartMs
+        Log.d(TAG, "[%5d ms] %s".format(t, message))
+    }
+
     /** Todo lo capturado en la captura en curso, ya limpio. */
     val text: String
         get() = normalizeTranscript(
@@ -125,6 +150,11 @@ class SpeechCapture(
         clear()
         isCapturing = true
         stopRequested = false
+
+        captureStartMs = SystemClock.elapsedRealtime()
+        sessionIndex = 0
+        lastEndOfSpeechMs = 0L
+        trace("START captura (capa B ${if (restartOnFinalize) "ENCENDIDA" else "apagada"})")
 
         beginSession()
     }
@@ -173,6 +203,9 @@ class SpeechCapture(
 
     private fun beginSession() {
         try {
+            sessionIndex += 1
+            lastStartListeningMs = SystemClock.elapsedRealtime()
+            trace("startListening #$sessionIndex")
             recognizer.startListening(intent)
             onListeningChanged(true)
         } catch (_: Exception) {
@@ -198,6 +231,8 @@ class SpeechCapture(
                 end != SpeechCaptureEnd.FAILED &&
                 canRestart()
 
+        trace("fin de sesion del motor #$sessionIndex: end=$end reinicio=${if (puedeReiniciar) "SI" else "no"}")
+
         if (puedeReiniciar) {
             onListeningChanged(false)
             handler.postDelayed({
@@ -214,6 +249,7 @@ class SpeechCapture(
         isCapturing = false
         handler.removeCallbacksAndMessages(null)
         onListeningChanged(false)
+        trace("FIN captura: end=$end sesiones=$sessionIndex texto=\"$text\"")
         onEnded(SpeechCaptureResult(end = end, text = text, errorCode = errorCode))
     }
 
@@ -227,11 +263,33 @@ class SpeechCapture(
 
     private val listener = object : RecognitionListener {
 
-        override fun onReadyForSpeech(params: Bundle?) = Unit
-        override fun onBeginningOfSpeech() = Unit
+        override fun onReadyForSpeech(params: Bundle?) {
+            val ahora = SystemClock.elapsedRealtime()
+            val arranque = ahora - lastStartListeningMs
+
+            // La ventana sorda de verdad: desde que el motor dejo de escuchar
+            // en la sesion anterior hasta que vuelve a estar listo. Lo que el
+            // alumno diga en ese hueco no lo oye nadie.
+            val hueco = if (lastEndOfSpeechMs > 0L) ahora - lastEndOfSpeechMs else -1L
+
+            trace(
+                "READY #$sessionIndex (motor escuchando) arranque=${arranque}ms" +
+                    if (hueco >= 0) " VENTANA SORDA=${hueco}ms" else ""
+            )
+        }
+
+        override fun onBeginningOfSpeech() {
+            trace("habla detectada #$sessionIndex")
+        }
+
         override fun onRmsChanged(rmsdB: Float) = Unit
         override fun onBufferReceived(buffer: ByteArray?) = Unit
-        override fun onEndOfSpeech() = Unit
+
+        override fun onEndOfSpeech() {
+            lastEndOfSpeechMs = SystemClock.elapsedRealtime()
+            trace("onEndOfSpeech #$sessionIndex (el motor dejo de escuchar)")
+        }
+
         override fun onEvent(eventType: Int, params: Bundle?) = Unit
 
         override fun onResults(results: Bundle?) {
@@ -240,6 +298,8 @@ class SpeechCapture(
                 ?.firstOrNull()
                 ?.trim()
                 .orEmpty()
+
+            trace("FINAL crudo #$sessionIndex: \"$best\"${if (best.isBlank()) "  <-- VACIO" else ""}")
 
             if (best.isNotBlank()) {
                 appendSegment(best)
@@ -253,6 +313,7 @@ class SpeechCapture(
 
             currentPartial = ""
             onTextChanged(text)
+            trace("acumulado: \"$text\"")
             sessionFinished(SpeechCaptureEnd.COMPLETED)
         }
 
@@ -262,6 +323,8 @@ class SpeechCapture(
                 ?.firstOrNull()
                 ?.trim()
                 .orEmpty()
+
+            trace("PARCIAL crudo #$sessionIndex: \"$partial\"")
 
             if (partial.isBlank()) return
 
@@ -330,22 +393,33 @@ class SpeechCapture(
             val anterior = dedupKey(ultimo)
             val entrante = dedupKey(limpio)
 
-            if (anterior == entrante) return
+            if (anterior == entrante) {
+                trace("SEGMENTO descartado (identico al anterior): \"$limpio\"")
+                return
+            }
 
             // Motor acumulativo: lo nuevo contiene a lo viejo como prefijo.
             // Reemplazar en vez de sumar deja una sola copia limpia.
             if (entrante.startsWith(anterior)) {
+                trace("SEGMENTO reemplaza al anterior por prefijo: \"$limpio\"")
                 committedSegments[committedSegments.lastIndex] = limpio
                 return
             }
 
             // Parcial corto que llega tarde, despues de un final mas largo.
-            if (anterior.startsWith(entrante)) return
+            if (anterior.startsWith(entrante)) {
+                trace("SEGMENTO descartado (el anterior ya lo contiene): \"$limpio\"")
+                return
+            }
         }
 
         // Repetido de algun segmento anterior, no solo del inmediato.
-        if (committedSegments.any { dedupKey(it) == dedupKey(limpio) }) return
+        if (committedSegments.any { dedupKey(it) == dedupKey(limpio) }) {
+            trace("SEGMENTO descartado (duplicado de uno anterior): \"$limpio\"")
+            return
+        }
 
+        trace("SEGMENTO agregado: \"$limpio\"")
         committedSegments.add(limpio)
     }
 
@@ -353,6 +427,8 @@ class SpeechCapture(
         text.trim().lowercase().replace(WHITESPACE, " ")
 
     companion object {
+        /** Filtro de Logcat para seguir una grabacion entera. */
+        private const val TAG = "SpeechCapture"
         private const val RESTART_DELAY_MS = 400L
         private val WHITESPACE = Regex("\\s+")
 
