@@ -58,6 +58,8 @@ data class SessionScreenState(
     val aiError: String?,
     val aiResult: AiFeedback?,
     val canEvaluate: Boolean,
+    /** Esta transcripcion ya tiene nota. El boton se apaga y lo dice. */
+    val alreadyEvaluated: Boolean,
     val engineLabel: String,
     val speechDetected: Boolean,
     val availableCategories: List<String>,
@@ -300,7 +302,16 @@ fun SessionScreen(
             ) {
                 Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(if (state.aiLoading) "Evaluating..." else "Evaluate with AI")
+                Text(
+                    when {
+                        state.aiLoading -> "Evaluating..."
+                        // Apagado y con motivo. Un boton gris sin explicacion
+                        // deja al alumno tocandolo sin saber por que no pasa
+                        // nada, que es la misma mentira de pantalla en pequeno.
+                        state.alreadyEvaluated -> "Already evaluated - record again"
+                        else -> "Evaluate with AI"
+                    }
+                )
             }
         }
 

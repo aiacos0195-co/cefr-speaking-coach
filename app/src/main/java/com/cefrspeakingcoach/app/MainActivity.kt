@@ -246,6 +246,13 @@ fun MainScreen(
     var isRecording by remember { mutableStateOf(false) }
     var isEvaluating by remember { mutableStateOf(false) }
     var isRefreshingPrompt by remember { mutableStateOf(false) }
+
+    // Una transcripcion se evalua UNA vez. Sin esto, cada toque extra
+    // guardaba otra sesion identica en el historial: el id sale de
+    // System.currentTimeMillis(), asi que el dedup de SessionStore —que
+    // compara por id— no disparaba nunca. Y dos copias del mismo discurso
+    // desvian el promedio de Progress y el criterio que elige Practice Plan.
+    var alreadyEvaluated by remember { mutableStateOf(false) }
     var transcript by remember { mutableStateOf("") }
     var liveTranscript by remember { mutableStateOf("") }
     var feedback by remember { mutableStateOf<AiFeedback?>(null) }
@@ -351,6 +358,7 @@ fun MainScreen(
         isRecording = false
         isEvaluating = false
         isRefreshingPrompt = false
+        alreadyEvaluated = false
         transcript = ""
         liveTranscript = ""
         spokenSeconds = 0
@@ -401,6 +409,7 @@ fun MainScreen(
         liveTranscript = ""
         feedback = null
         aiError = null
+        alreadyEvaluated = false
         spokenSeconds = 0
         timeLeft = totalSeconds
         // Se marca UNA vez, al empezar. Con la capa B encendida el reconocedor
@@ -474,6 +483,7 @@ fun MainScreen(
 
                 feedback = result
                 statusText = "Evaluation complete"
+                alreadyEvaluated = true
 
                 // isEvaluating NO se apaga aqui. Debajo hay un guardado en
                 // Firestore que suspende, y apagarlo antes reactivaba el boton
@@ -594,7 +604,9 @@ fun MainScreen(
                     promptRefreshLoading = isRefreshingPrompt,
                     aiError = aiError,
                     aiResult = feedback,
-                    canEvaluate = finalTranscript.isNotBlank() && !isRecording && !isEvaluating && !isRefreshingPrompt,
+                    canEvaluate = finalTranscript.isNotBlank() && !isRecording &&
+                        !isEvaluating && !isRefreshingPrompt && !alreadyEvaluated,
+                    alreadyEvaluated = alreadyEvaluated,
                     engineLabel = "Default",
                     speechDetected = liveTranscript.isNotBlank(),
                     availableCategories = categories,
