@@ -113,22 +113,78 @@ Borrarlo después no sirve — queda en el historial de Git para siempre.
 
 Van antes que el resto del paso 5.
 
-### A.1 La transcripción se corta en las sesiones por nivel · PRIORITARIO
+### A.1 El reconocedor todavía pierde texto · PRIORITARIO
 
-En una sesión de práctica por nivel, al tocar **Start record**, una pausa mínima
-al hablar corta la transcripción. El alumno se detiene a pensar medio segundo y
-pierde lo que venía diciendo.
+**Resuelto lo primero.** `SpeechCapture` es hoy el único reconocedor: las
+sesiones por nivel y AI Conversation corren el mismo código. Las ventanas de
+silencio van siempre puestas, y encima la capa de reinicio con acumulación
+(`SESSION_RESTART_ON_FINALIZE = true`), porque el S24 ignora las ventanas.
 
-**Es el mismo problema que ya resolvimos en AI Conversation.** La sospecha es que
-las sesiones usan el reconocedor viejo de `MainActivity` (`startRecording`) y no
-el de `AIConversationScreen`, donde el arreglo ya vive.
+> **NO modo continuo.** Reiniciar y coser los trozos a ciegas sigue descartado
+> (Anexo A). La capa que corre hoy es reinicio **con acumulación**, que es otra
+> cosa. Esto no lo reabre.
 
-El arreglo es **extraer a un componente compartido** la lógica que ya funciona,
-no escribir un segundo parche. Dos reconocedores con dos arreglos distintos es
-cómo se llega a tener el mismo bug dos veces.
+**Lo que sigue perdiendo texto.** Cinco mecanismos, los cuatro primeros medidos
+con la traza del 21-sep y el quinto observado el 22-sep. Van en un build
+aparte, un commit por punto, en este orden:
 
-> **NO modo continuo.** Reiniciar el reconocedor y coser los trozos está
-> descartado en el Anexo A: perdía texto. Esto no lo reabre.
+1. **`stop()` descarta el final.** Llama a `recognizer.cancel()`, que tira lo
+   que el motor tenía sin entregar. Tiene que ser `stopListening()` y esperar
+   el final, con tope cerca de **1,5 s**; si no llega, vale el último parcial.
+   Con un estado visible **"Processing…"** que bloquee Evaluate, Start, New
+   Prompt y Refresh mientras tanto. El vencimiento del temporizador usa el
+   mismo camino.
+
+2. **El hueco sordo del reinicio.** Medido en ~600 ms, de los cuales 400 son
+   nuestra propia constante `RESTART_DELAY_MS`. A cero, reintentando **solo**
+   con `ERROR_RECOGNIZER_BUSY` y trazando cada BUSY.
+   *Criterio:* hueco cerca de 200 ms y ningún arranque perdido.
+
+3. **Errores sin traza.** Registrar cada `onError` con código y hora, y medir el
+   hueco desde el último evento de la sesión que muere — `onEndOfSpeech`
+   **o** `onError`, el que llegue.
+
+4. **Decimos "escuchando" antes de tiempo.** El estado solo después de
+   `onReadyForSpeech`. Medir también Start→READY en la sesión 1.
+
+5. **Pantalla apagada y app fuera de primer plano** *(nuevo, 22-sep)*. En una
+   grabación de 60 s se perdieron unas 25 palabras seguidas en medio del texto,
+   y la pantalla se apaga sola a mitad de la grabación.
+
+   Desde Android 9, una app que **no está visible no puede capturar audio**, y
+   `SpeechRecognizer` graba a nombre nuestro, no del servicio de
+   reconocimiento. Así que al apagarse la pantalla el micrófono se corta. Lo
+   que devuelve el motor cambia según el fabricante: a veces `ERROR_NO_MATCH` o
+   `ERROR_SPEECH_TIMEOUT`, a veces **nada** — la sesión se queda muda mientras
+   la pantalla sigue diciendo "escuchando". Ese último caso es exactamente lo
+   observado.
+
+   Y con la capa de reinicio encendida hay un agravante: si el motor reporta
+   error con la pantalla apagada, `SpeechCapture` reinicia, y cada reinicio
+   vuelve a pedir un micrófono que tampoco le van a dar. Se puede ir medio
+   minuto en un ciclo de reinicios que no oye nada.
+
+   El arreglo son dos cosas, no una:
+   - **Mantener la pantalla encendida** mientras la captura esté activa
+     (`keepScreenOn` sobre la vista, en un `DisposableEffect`, que se revierte
+     solo al salir — no la bandera de ventana a mano).
+   - **Si la app sale de primer plano igual** (botón de encendido, una llamada,
+     cambio de app): detener la captura y **decirlo en pantalla**, en vez de
+     seguir "grabando" sin oír. La transcripción de hasta ahí se conserva —
+     detener, no cancelar — y se puede evaluar.
+
+   ⚠️ El disparador es `ON_STOP`, **no `ON_PAUSE`**. Un diálogo de permisos o
+   el de descarga pausan la actividad sin ocultarla, y ahí el micrófono sigue
+   siendo nuestro: detener en `ON_PAUSE` sería un falso positivo en cada
+   diálogo.
+
+   Lo mismo en **AI Conversation**.
+
+   *Depende del punto 1:* detener bien necesita el camino de `stopListening()`
+   con tope, así que va después, no antes.
+
+   *Criterio:* en la traza de la próxima grabación larga, ningún `ON_STOP`
+   durante la captura, y ningún hueco que coincida con el apagado de pantalla.
 
 ### A.2 El ícono sigue siendo el robot verde
 
@@ -393,6 +449,33 @@ Gemini 2.5 Flash acepta audio. Mandarle la grabación resolvería los tres de un
 vez: sin errores del reconocedor, con pronunciación medida de verdad, y con las
 muletillas audibles donde sí están.
 
+**Dato del 22-sep (texto del apartamento, 28 s, 47 palabras).** El motor no
+solo pierde palabras: **las cambia**. "quiet" salió "choir"; "enormous" salió
+"suspicious"; "a large window that provides" salió "Allure window depravise".
+Más "My favorite place" y "light" perdidos: unos diez errores en 47 palabras.
+
+Conviene separar los dos tipos, porque no tienen el mismo pronóstico:
+
+| Tipo | Ejemplo | ¿Lo arregla el build del reconocedor? |
+|---|---|---|
+| **Mutación** | quiet → choir | **No.** Es calidad del motor |
+| **Omisión** | "light" | Puede ser: el hueco del reinicio sí se ataca |
+
+⚠️ **Esto NO decide la condición, y el dato no se puede leer solo.** El 21-sep
+el mismo texto se leyó dos veces y esas tres expresiones salieron **bien las
+dos veces**. La lectura mala fue con el teléfono conectado por cable. Son
+condiciones que no controlamos, y una lectura no es una muestra.
+
+> Ya costó una conclusión equivocada tratar un dato como si fuera muestra: el
+> 21-sep dos evaluaciones salieron A2 y A1 con un texto claramente por encima,
+> y se dio por hecho que la nota medía al reconocedor. La sesión A1 tenía el
+> prompt cambiado y Coherence 1/5 — no era comparable. Quedaba un dato, y un
+> dato no es evidencia.
+
+**La condición se mide como quedó escrita:** después del build del reconocedor,
+**tres lecturas, con el teléfono en la mano y sin ruido**, contando omisiones y
+mutaciones (sin contar contracciones), y vale la peor. Umbral: ≤2 errores.
+
 **El costo es real:** `SpeechRecognizer` no entrega el audio, así que habría que
 grabar en paralelo con `MediaRecorder`, manejar el archivo y subirlo.
 
@@ -515,6 +598,7 @@ tiene que seguir estando disponible.
 | El coach no responde en AI Conversation | Token de depuración de App Check. **Cambia cada vez que desinstalas la app o borras sus datos** — hay que registrar el nuevo en Firebase → App Check → Administrar tokens de depuración |
 | `grep` "no se reconoce como cmdlet" al leer logs | PowerShell corta la tubería antes de `adb`. Va todo dentro de comillas: `adb shell "dumpsys alarm \| grep ..."` |
 | El APK instalado no tiene el cambio | **Run de Studio no escribe en `app/build/outputs/apk/debug/`.** Generar con Build → Build APK(s) y mirar la fecha del archivo |
+| `PFTBT: Transport rejected backup ... skipping`, con `status: 0` | **Causa no informada por el transporte.** Google rechaza ~90 ms después del intento, sin una sola línea de progreso. Probable límite de frecuencia tras dos copias forzadas la noche anterior. Qué hacer: **medir con el transporte local**, no con el de Google |
 | El botón Descargar sale gris | `MODELS_BASE_URL` sin configurar |
 | "Falló la descarga: HTTP 404" | El repo de voces se volvió privado, o cambió el tag |
 | Voz del sistema en vez de neuronal | El modelo no está instalado; míralo en Coach voice |
