@@ -216,8 +216,6 @@ fun MainScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val authManager = remember { AuthManager(context) }
-    val firestoreRepository = remember { FirestoreSessionRepository() }
     val sessionStore = remember { SessionStore(context) }
     val reminderManager = remember { DailyReminderManager(context) }
     val promptStore = remember { PromptStore(context) }
@@ -240,10 +238,6 @@ fun MainScreen(
     var selectedLevel by remember { mutableStateOf("A1") }
     var selectedHistorySession by remember { mutableStateOf<PracticeSession?>(null) }
     var savedPromptsLevelFilter by remember { mutableStateOf("All") }
-
-    var signedInUser by remember { mutableStateOf(authManager.currentUser()) }
-    var isSigningIn by remember { mutableStateOf(false) }
-    var authError by remember { mutableStateOf<String?>(null) }
 
     var selectedCategory by remember { mutableStateOf(promptStore.getSelectedCategory(selectedLevel)) }
     var currentPrompt by remember { mutableStateOf<PromptItem?>(null) }
@@ -503,13 +497,6 @@ fun MainScreen(
                 // Primero lo local, que es sincrono y no puede colgarse.
                 sessionStore.saveSession(session)
                 sessions = sessionStore.getSessions()
-
-                // Y a la nube sin esperar: ver saveSessionInBackground. La
-                // evaluacion ya termino para el alumno; que la copia en la nube
-                // tarde, o no llegue, no puede dejarle el boton bloqueado.
-                signedInUser?.let { user ->
-                    firestoreRepository.saveSessionInBackground(user.uid, session)
-                }
                 return@launch
             } catch (e: CancellationException) {
                 // Cancelar es una operacion normal, no un fallo. Relanzarla es
@@ -552,27 +539,6 @@ fun MainScreen(
         }
     }
 
-    LaunchedEffect(signedInUser?.uid) {
-        val user = signedInUser
-        if (user == null) {
-            sessions = sessionStore.getSessions()
-        } else {
-            try {
-                firestoreRepository.saveUserProfile(user)
-                val cloudSessions = firestoreRepository.loadSessions(user.uid)
-                if (cloudSessions.isNotEmpty()) {
-                    sessions = cloudSessions
-                    sessionStore.replaceAll(cloudSessions)
-                } else {
-                    sessions = sessionStore.getSessions()
-                }
-            } catch (e: Exception) {
-                authError = e.message ?: "Failed to sync cloud data."
-                sessions = sessionStore.getSessions()
-            }
-        }
-    }
-
     AppDrawerShell(
         selectedScreen = currentScreen,
         onScreenChange = {
@@ -582,29 +548,6 @@ fun MainScreen(
             }
         },
         uiLanguage = uiLanguage,
-        currentUser = signedInUser,
-        isSigningIn = isSigningIn,
-        authError = authError,
-        onGoogleSignIn = {
-            scope.launch {
-                isSigningIn = true
-                authError = null
-                try {
-                    val user = authManager.signInWithGoogle()
-                    signedInUser = user
-                    firestoreRepository.saveUserProfile(user)
-                } catch (e: Exception) {
-                    authError = e.message ?: "Google sign-in failed."
-                } finally {
-                    isSigningIn = false
-                }
-            }
-        },
-        onSignOut = {
-            authManager.signOut()
-            signedInUser = null
-            sessions = sessionStore.getSessions()
-        },
         homeContent = {
             HomeScreenV2(
                 selectedLevel = selectedLevel,

@@ -1,14 +1,10 @@
 package com.cefrspeakingcoach.app
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -16,11 +12,9 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Speed
-import androidx.compose.material3.Button
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -31,7 +25,6 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -63,11 +56,6 @@ fun AppDrawerShell(
     selectedScreen: DrawerScreen,
     onScreenChange: (DrawerScreen) -> Unit,
     uiLanguage: UiLanguage,
-    currentUser: SignedInUser?,
-    isSigningIn: Boolean,
-    authError: String?,
-    onGoogleSignIn: () -> Unit,
-    onSignOut: () -> Unit,
     homeContent: @Composable () -> Unit,
     sessionContent: @Composable () -> Unit,
     aiConversationContent: @Composable () -> Unit,
@@ -99,58 +87,6 @@ fun AppDrawerShell(
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(16.dp)
                 )
-
-                HorizontalDivider()
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (currentUser == null) {
-                        Text(
-                            "Account",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        Button(
-                            onClick = onGoogleSignIn,
-                            enabled = !isSigningIn,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Outlined.Person, contentDescription = null)
-                            Spacer(Modifier.weight(0.05f))
-                            Text(if (isSigningIn) "Signing in..." else "Sign in with Google")
-                        }
-
-                        authError?.let { errorMessage ->
-                            Text(
-                                text = errorMessage,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    } else {
-                        Text(
-                            currentUser.displayName ?: "User",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            currentUser.email ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        OutlinedButton(
-                            onClick = onSignOut,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = null)
-                            Spacer(Modifier.weight(0.05f))
-                            Text("Sign out")
-                        }
-                    }
-                }
 
                 HorizontalDivider()
 

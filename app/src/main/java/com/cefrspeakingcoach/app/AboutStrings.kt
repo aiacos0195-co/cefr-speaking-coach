@@ -59,8 +59,10 @@ data class AboutStrings(
                 "speech recognition, and that text is sent to Google's Gemini " +
                 "to write the coach's reply. So your conversations do leave the " +
                 "device. Keep that in mind before discussing anything sensitive.",
-            privacyNoAccount = "Your practice history and progress stay on your " +
-                "phone.",
+            privacyNoAccount = "Your practice history is stored on your phone. " +
+                "If Android backup is turned on, it is also included in your " +
+                "Google account's backup. The developer has no access to " +
+                "either.",
             licenseTitle = "License",
             licenseBody = "This app is free software, released under the GNU " +
                 "General Public License v3.0. You may use it, study it, change " +
@@ -95,8 +97,10 @@ data class AboutStrings(
                 "Google, para escribir la respuesta del coach. O sea que tus " +
                 "conversaciones sí salen del dispositivo. Tenlo presente antes " +
                 "de hablar de algo sensible.",
-            privacyNoAccount = "Tu historial de práctica y tu progreso se quedan " +
-                "en el teléfono.",
+            privacyNoAccount = "Tu historial de práctica se guarda en tu " +
+                "teléfono. Si tienes activada la copia de seguridad de Android, " +
+                "también queda en la copia de seguridad de tu cuenta de Google. " +
+                "El desarrollador no tiene acceso a ninguna de las dos.",
             licenseTitle = "Licencia",
             licenseBody = "Esta app es software libre, publicada bajo la " +
                 "Licencia Pública General de GNU v3.0. Puedes usarla, " +
