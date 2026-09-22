@@ -31,6 +31,10 @@ enum class UiLanguage {
 
 class UiLanguageStore(context: Context) {
 
+    // Respaldo: este archivo esta en la lista de INCLUSION de
+    // backup_rules.xml y de las dos secciones de data_extraction_rules.xml.
+    // Unas prefs NUEVAS hay que agregarlas ahi tambien, o no se respaldan
+    // y nadie se entera hasta que alguien restaure.
     private val prefs = context.applicationContext
         .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

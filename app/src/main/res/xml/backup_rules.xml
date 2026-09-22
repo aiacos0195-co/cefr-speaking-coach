@@ -1,13 +1,33 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Reglas de Auto Backup para API <= 30. Para API 31+ manda
+    data_extraction_rules.xml, que dice exactamente lo mismo.
+
+    Es una lista de INCLUSION, no de exclusion, y eso es deliberado:
+
+    1. El modelo de voz vive en filesDir y ocupa unos 96 MB. Auto Backup tiene
+       un tope de 25 MB por app, y al pasarlo Android NO recorta: descarta la
+       copia entera, en silencio. Nombrando solo lo que queremos, filesDir
+       queda fuera y el modelo con el, sin tener que nombrarlo.
+
+    2. Firebase escribe en filesDir y en SharedPreferences: el id de
+       instalacion, los archivos de Crashlytics, la cache del token de App
+       Check. Nada de eso debe restaurarse en otro telefono — un id de
+       instalacion clonado deja dos aparatos diciendo ser el mismo. Una lista
+       de exclusiones tendria que acertar esos nombres, que son internos de los
+       SDK y cambian entre versiones. Una de inclusion no necesita conocerlos.
+
+    EL COSTO: unas SharedPreferences nuevas hay que agregarlas aqui Y en
+    data_extraction_rules.xml, o dejan de respaldarse sin que nadie se entere.
+
+    El path lleva la extension .xml. Un path que no coincide deja esas prefs
+    fuera en silencio.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <include domain="sharedpref" path="cefr_sessions.xml"/>
+    <include domain="sharedpref" path="cefr_settings.xml"/>
+    <include domain="sharedpref" path="cefr_prompt_store.xml"/>
+    <include domain="sharedpref" path="sherpa_speaker_ids.xml"/>
+    <include domain="sharedpref" path="ui_language_prefs.xml"/>
+    <include domain="sharedpref" path="voice_download_prefs.xml"/>
 </full-backup-content>

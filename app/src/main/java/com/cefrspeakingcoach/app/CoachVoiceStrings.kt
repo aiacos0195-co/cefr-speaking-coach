@@ -52,8 +52,8 @@ data class CoachVoiceStrings(
         private fun english() = CoachVoiceStrings(
             title = "Coach Voice",
             intro = "Your coach can speak with a natural voice that works " +
-                "without internet. You download it once and it stays on your " +
-                "phone. Without it, your coach uses the system voice.",
+                "without internet. It downloads once per phone and stays " +
+                "there. Without it, your coach uses the system voice.",
             statusOn = "Natural voice is on",
             statusOff = "Natural voice not downloaded",
             installedSize = { mb -> "It takes up $mb MB on your phone." },
@@ -90,8 +90,8 @@ data class CoachVoiceStrings(
         private fun spanish() = CoachVoiceStrings(
             title = "Voz del coach",
             intro = "Tu coach puede hablar con una voz natural que funciona sin " +
-                "internet. Se descarga una sola vez y queda guardada en el " +
-                "teléfono. Sin ella, el coach usa la voz del sistema.",
+                "internet. Se descarga una vez en cada teléfono y queda " +
+                "guardada ahí. Sin ella, el coach usa la voz del sistema.",
             statusOn = "Voz natural activada",
             statusOff = "Voz natural no descargada",
             installedSize = { mb -> "Ocupa $mb MB en el teléfono." },
