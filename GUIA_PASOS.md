@@ -286,23 +286,90 @@ Backup "activado", el progreso de quien haya descargado la voz no se respalda.
    idénticas, porque el id sale de `System.currentTimeMillis()` y el dedup de
    `SessionStore` compara por id.
 
-**Plan de prueba**
+**Plan de prueba** — en este orden. **La restauración va de última**, porque
+desinstalar cambia el token de depuración de App Check y hay que registrar el
+nuevo antes de volver a probar nada que use AI Logic.
 
-- `adb shell bmgr backupnow com.cefrspeakingcoach.app` con la voz descargada:
-  ahora debe dar Success. **La línea que vale es la del paquete** — la última,
-  `Backup finished with result: Success`, se refiere a la corrida y sale bien
-  aunque el paquete falle.
-- Medir con `adb shell run-as com.cefrspeakingcoach.app ls -l shared_prefs` y
-  comparar la suma de los seis con lo que reporte `bmgr`. Si `bmgr` da
-  claramente más, está entrando algo que no debería.
-- Restaurar (desinstalar e instalar el APK; "Run" desde Studio no siempre
-  dispara la restauración): el historial vuelve, Coach Voice dice "Voz natural
-  no descargada", y el recordatorio o queda programado o muestra la tarjeta de
-  notificaciones bloqueadas. **Que no salga ninguna de las dos es el fallo.**
-- Evaluar dos veces la misma transcripción: el botón queda deshabilitado tras la
-  primera, y el historial no gana una sesión repetida.
-- **Grabar, no evaluar, y pulsar Refresh Prompt (AI):** la transcripción se
-  borra y Evaluate queda deshabilitado.
+**1. Respaldo con la voz descargada.** Es la prueba que justifica el commit de
+reglas.
+
+```
+adb shell bmgr backupnow com.cefrspeakingcoach.app
+```
+
+Debe dar Success. **La línea que vale es la del paquete** — la última,
+`Backup finished with result: Success`, se refiere a la corrida y sale bien
+aunque el paquete falle.
+
+**2. Tamaño: que no entre nada de más.**
+
+```
+adb shell run-as com.cefrspeakingcoach.app ls -l shared_prefs
+```
+
+Sumar los seis y comparar con lo que reportó `bmgr`. Si `bmgr` da claramente
+más que la suma, está entrando algo que no debería.
+
+**3. Sin inicio de sesión.** La app abre directo a la sesión: ni pantalla de
+Google, ni entrada de cuenta en el menú, ni mención de sincronización en ningún
+texto. El historial y el progreso siguen cargando —viven en `cefr_sessions.xml`,
+que no se tocó.
+
+**4. Una transcripción, una evaluación.** Grabar → Evaluate → esperar el
+resultado → Evaluate otra vez: el botón queda deshabilitado y dice
+`Already evaluated - record again`, y el historial **no** gana una sesión
+repetida. Grabar de nuevo, o New Prompt, lo vuelve a habilitar.
+
+**5. Grabar, no evaluar, y pulsar Refresh Prompt (AI):** la transcripción se
+borra y Evaluate queda deshabilitado.
+
+**6. Restauración — al final.**
+
+Primero el APK. **"Run" de Android Studio no actualiza
+`app/build/outputs/apk/debug/`**: el que esté ahí puede ser de hace semanas.
+Generarlo desde **Build → Build APK(s)** y **comprobar la fecha del archivo**
+antes de instalar.
+
+Esta prueba cambia un ajuste del teléfono, así que va con el camino de vuelta.
+Anotar primero cuál transporte tiene el `*`:
+
+```
+adb shell bmgr list transports
+adb shell bmgr transport com.android.localtransport/.LocalTransport
+adb shell bmgr backupnow com.cefrspeakingcoach.app
+adb uninstall com.cefrspeakingcoach.app
+adb install app/build/outputs/apk/debug/app-debug.apk
+adb shell bmgr list sets          # tomar el token
+adb shell bmgr restore <token> com.cefrspeakingcoach.app
+```
+
+Vuelta al original, **sin falta** — es un teléfono personal y sus copias reales
+no pueden dejar de hacerse:
+
+```
+adb shell bmgr transport <el que tenía el * al principio>
+adb shell bmgr list transports    # el * de vuelta donde estaba
+adb shell bmgr enabled            # tiene que decir enabled
+```
+
+Tres criterios al abrir la app restaurada:
+
+- El historial vuelve, con las sesiones que había.
+- Coach Voice dice "Voz natural no descargada" — el modelo de 96 MB no viajó,
+  que es justo lo que queremos.
+- El recordatorio: **o** queda una alarma programada, **o** aparece la tarjeta
+  de notificaciones bloqueadas. Las dos son correctas, porque Android puede
+  restaurar o no el permiso. **Que no salga ninguna de las dos es el fallo.**
+
+```
+adb shell "dumpsys alarm | grep cefrspeakingcoach"
+```
+
+**Las comillas no son opcionales.** En PowerShell, sin ellas el `grep` corre en
+Windows, donde no existe; hay que mandar la tubería entera dentro del `adb
+shell`.
+
+Al terminar: registrar en Firebase el token de depuración nuevo de App Check.
 
 ### 5.8 Evaluar con audio en vez de texto
 
@@ -446,6 +513,8 @@ tiene que seguir estando disponible.
 | Síntoma | Causa probable |
 |---|---|
 | El coach no responde en AI Conversation | Token de depuración de App Check. **Cambia cada vez que desinstalas la app o borras sus datos** — hay que registrar el nuevo en Firebase → App Check → Administrar tokens de depuración |
+| `grep` "no se reconoce como cmdlet" al leer logs | PowerShell corta la tubería antes de `adb`. Va todo dentro de comillas: `adb shell "dumpsys alarm \| grep ..."` |
+| El APK instalado no tiene el cambio | **Run de Studio no escribe en `app/build/outputs/apk/debug/`.** Generar con Build → Build APK(s) y mirar la fecha del archivo |
 | El botón Descargar sale gris | `MODELS_BASE_URL` sin configurar |
 | "Falló la descarga: HTTP 404" | El repo de voces se volvió privado, o cambió el tag |
 | Voz del sistema en vez de neuronal | El modelo no está instalado; míralo en Coach voice |
